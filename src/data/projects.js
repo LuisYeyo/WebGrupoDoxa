@@ -52,18 +52,18 @@ export const projects = [
 
 
   {
-    id: "dynasol-porton",
-    slug: "dynasol-porton",
+    id: "dynasol-ponton",
+    slug: "dynasol-ponton",
     number: "02",
 
     client: "DYNASOL",
 
     title: {
       es:
-        "Fabricación de portón",
+        "Fabricación de pontón",
 
       en:
-        "Gate fabrication",
+        "Platform fabrication",
     },
 
     location: {
