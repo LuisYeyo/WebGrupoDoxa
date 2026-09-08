@@ -428,6 +428,57 @@ export const equipment = [
       "/images/equipment/infra-mi2300-02.jpg",
     ],
   },
+
+  {
+    id:
+      "ZL140",
+
+    number: "09",
+
+    name: {
+      es:
+        "Perforadora industrial ZL140",
+      en:
+        "ZL140 Drilling Rig",
+    },
+
+    category:
+      "drilling",
+
+    categoryName: {
+      es:"Perforación",
+      en:"Drilling",
+    },
+
+    brand:
+      "Zoomlion",
+
+    model:
+      "ZL140",
+    
+    capacity: null,
+
+    use: {
+      es:
+        "Perforación de cimentaciones.",
+      en:
+        "Foundation drilling.",
+    },
+
+    relatedServices: [
+      "drilling",
+      "structures",
+    ],
+
+    image:
+      "/images/equipment/01.jpg",
+
+    images: [
+      "/images/equipment/01.jpg",
+      "/images/equipment/02.jpg"
+    ]
+
+  }
 ]
 
 export const equipmentCategories =
@@ -495,6 +546,17 @@ export const equipmentCategories =
           "Transportation",
       },
     },
+
+    {
+      id: "drilling",
+
+      label: {
+        es:
+          "Perforación",
+        en:
+          "Drilling",
+      },
+    }
   ]
 
 export const getEquipmentByCategory =

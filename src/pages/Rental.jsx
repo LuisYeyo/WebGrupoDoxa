@@ -396,6 +396,39 @@ const equipment = [
         "Transport · Logistics · Materials",
     },
   },
+
+  {
+    id:
+      "perforadora",
+
+    folder:
+      "perforadora",
+
+    name: {
+      es:
+        "Perforadora de cimentaciones",
+      en:
+        "Rotary drilling rig",
+    },
+
+    model:
+      "ZL140",
+
+    description: {
+      es:
+        "Perforación de cimentaciones para estructuras",
+      en:
+        "Foundation Drilling for Structures",
+    },
+
+    uses: {
+      es:
+        "Perforación · Cimentaciones · Estructuras",
+      en:
+        "Drilling · Foundations · Structures",
+    },
+
+  }
 ]
 
 
@@ -468,8 +501,8 @@ function Rental() {
           >
             <p className="rental-hero-description">
               {t(
-                "Contamos con equipos para apoyar operaciones de fabricación, mantenimiento, montaje, transporte y trabajo en campo.",
-                "We provide equipment to support fabrication, maintenance, installation, transportation and field operations."
+                "Contamos con equipos para apoyar operaciones de fabricación, mantenimiento, montaje, transporte, perforación y trabajo en campo.",
+                "We provide equipment to support fabrication, maintenance, installation, transportation, drilling and field operations."
               )}
             </p>
           </PageReveal>
@@ -610,7 +643,7 @@ function Rental() {
                 <p>
                   {t(
                     "Cuéntanos qué necesitas y podremos revisar disponibilidad y requerimientos.",
-                    "Tell us what you need and we can review availability and project requirements."
+                    "Tell us what you need and we can check availability and project requirements."
                   )}
                 </p>
 
