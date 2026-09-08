@@ -50,17 +50,9 @@ function Navbar() {
   ] = useState(false)
 
   const [
-    languageOpen,
-    setLanguageOpen,
-  ] = useState(false)
-
-  const [
     visible,
     setVisible,
   ] = useState(false)
-
-  const languageRef =
-    useRef(null)
 
   const isHome =
     location.pathname === "/"
@@ -81,7 +73,8 @@ function Navbar() {
     const handleScroll =
       () => {
         setScrolled(
-          window.scrollY > 55
+          window.scrollY >
+            55
         )
       }
 
@@ -106,36 +99,8 @@ function Navbar() {
 
   useEffect(() => {
     setMenuOpen(false)
-    setLanguageOpen(false)
     setVisible(true)
   }, [location.pathname])
-
-
-  useEffect(() => {
-    const handleClickOutside =
-      (event) => {
-        if (
-          languageRef.current &&
-          !languageRef.current.contains(
-            event.target
-          )
-        ) {
-          setLanguageOpen(false)
-        }
-      }
-
-    document.addEventListener(
-      "mousedown",
-      handleClickOutside
-    )
-
-    return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside
-      )
-    }
-  }, [])
 
 
   const navigation = [
@@ -168,12 +133,9 @@ function Navbar() {
     },
 
     {
-      id:
-        "infrastructure",
-      es:
-        "Infraestructura",
-      en:
-        "Infrastructure",
+      id: "infrastructure",
+      es: "Infraestructura",
+      en: "Infrastructure",
       path:
         "/infraestructura",
       width:
@@ -214,7 +176,8 @@ function Navbar() {
       if (isHome) {
         window.scrollTo({
           top: 0,
-          behavior: "smooth",
+          behavior:
+            "smooth",
         })
 
         return
@@ -230,24 +193,6 @@ function Navbar() {
         "/contacto"
       )
     }
-
-
-  const selectLanguage =
-    (nextLanguage) => {
-      setLanguage(
-        nextLanguage
-      )
-
-      setLanguageOpen(
-        false
-      )
-    }
-
-
-  const currentFlag =
-    language === "es"
-      ? mxFlag
-      : usFlag
 
 
   const overlayMode =
@@ -315,6 +260,7 @@ function Navbar() {
                 item.id ===
                 "home"
               ) {
+
                 const active =
                   isHome
 
@@ -390,133 +336,16 @@ function Navbar() {
 
         <div className="navbar-actions">
 
-
-          {/* LANGUAGE DROPDOWN */}
-
-          <div
-            className="language-dropdown"
-            ref={
-              languageRef
+          <LanguageDropdown
+            language={
+              language
             }
-          >
+            setLanguage={
+              setLanguage
+            }
+            t={t}
+          />
 
-            <button
-              type="button"
-              onClick={() =>
-                setLanguageOpen(
-                  (
-                    current
-                  ) =>
-                    !current
-                )
-              }
-              className="language-dropdown-trigger"
-              aria-label={t(
-                "Seleccionar idioma",
-                "Select language"
-              )}
-              aria-expanded={
-                languageOpen
-              }
-            >
-
-              <img
-                src={
-                  currentFlag
-                }
-                alt=""
-                className="language-dropdown-flag"
-              />
-
-              <ChevronDown
-                size={14}
-                className={`
-                  language-dropdown-chevron
-
-                  ${
-                    languageOpen
-                      ? "language-dropdown-chevron--open"
-                      : ""
-                  }
-                `}
-              />
-
-            </button>
-
-
-            <div
-              className={`
-                language-dropdown-menu
-
-                ${
-                  languageOpen
-                    ? "language-dropdown-menu--open"
-                    : ""
-                }
-              `}
-            >
-
-              <button
-                type="button"
-                onClick={() =>
-                  selectLanguage(
-                    "es"
-                  )
-                }
-                className={`
-                  language-dropdown-item
-
-                  ${
-                    language ===
-                    "es"
-                      ? "language-dropdown-item--active"
-                      : ""
-                  }
-                `}
-                aria-label="Español"
-              >
-
-                <img
-                  src={mxFlag}
-                  alt="México"
-                />
-
-              </button>
-
-
-              <button
-                type="button"
-                onClick={() =>
-                  selectLanguage(
-                    "en"
-                  )
-                }
-                className={`
-                  language-dropdown-item
-
-                  ${
-                    language ===
-                    "en"
-                      ? "language-dropdown-item--active"
-                      : ""
-                  }
-                `}
-                aria-label="English"
-              >
-
-                <img
-                  src={usFlag}
-                  alt="United States"
-                />
-
-              </button>
-
-            </div>
-
-          </div>
-
-
-          {/* QUOTE */}
 
           <button
             type="button"
@@ -565,95 +394,16 @@ function Navbar() {
 
         <div className="navbar-mobile-actions">
 
-
-          <div
-            className="language-dropdown"
-          >
-
-            <button
-              type="button"
-              onClick={() =>
-                setLanguageOpen(
-                  (
-                    current
-                  ) =>
-                    !current
-                )
-              }
-              className="
-                language-dropdown-trigger
-                language-dropdown-trigger--mobile
-              "
-              aria-label={t(
-                "Seleccionar idioma",
-                "Select language"
-              )}
-            >
-
-              <img
-                src={
-                  currentFlag
-                }
-                alt=""
-                className="language-dropdown-flag"
-              />
-
-              <ChevronDown
-                size={13}
-              />
-
-            </button>
-
-
-            <div
-              className={`
-                language-dropdown-menu
-                language-dropdown-menu--mobile
-
-                ${
-                  languageOpen
-                    ? "language-dropdown-menu--open"
-                    : ""
-                }
-              `}
-            >
-
-              <button
-                type="button"
-                onClick={() =>
-                  selectLanguage(
-                    "es"
-                  )
-                }
-                className="language-dropdown-item"
-                aria-label="Español"
-              >
-                <img
-                  src={mxFlag}
-                  alt="México"
-                />
-              </button>
-
-
-              <button
-                type="button"
-                onClick={() =>
-                  selectLanguage(
-                    "en"
-                  )
-                }
-                className="language-dropdown-item"
-                aria-label="English"
-              >
-                <img
-                  src={usFlag}
-                  alt="United States"
-                />
-              </button>
-
-            </div>
-
-          </div>
+          <LanguageDropdown
+            language={
+              language
+            }
+            setLanguage={
+              setLanguage
+            }
+            t={t}
+            mobile
+          />
 
 
           <button
@@ -764,6 +514,222 @@ function Navbar() {
       </div>
 
     </header>
+  )
+}
+
+
+/* =========================================================
+   LANGUAGE DROPDOWN
+========================================================= */
+
+function LanguageDropdown({
+  language,
+  setLanguage,
+  t,
+  mobile = false,
+}) {
+  const [
+    open,
+    setOpen,
+  ] = useState(false)
+
+  const ref =
+    useRef(null)
+
+
+  useEffect(() => {
+    const handleOutside =
+      (event) => {
+
+        if (
+          ref.current &&
+          !ref.current.contains(
+            event.target
+          )
+        ) {
+          setOpen(false)
+        }
+      }
+
+
+    document.addEventListener(
+      "mousedown",
+      handleOutside
+    )
+
+
+    document.addEventListener(
+      "touchstart",
+      handleOutside
+    )
+
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleOutside
+      )
+
+      document.removeEventListener(
+        "touchstart",
+        handleOutside
+      )
+    }
+  }, [])
+
+
+  const selectLanguage =
+    (nextLanguage) => {
+
+      setLanguage(
+        nextLanguage
+      )
+
+      setOpen(false)
+    }
+
+
+  const currentFlag =
+    language === "es"
+      ? mxFlag
+      : usFlag
+
+
+  return (
+    <div
+      className="language-dropdown"
+      ref={ref}
+    >
+
+      <button
+        type="button"
+        onClick={() =>
+          setOpen(
+            (
+              current
+            ) =>
+              !current
+          )
+        }
+        className={`
+          language-dropdown-trigger
+
+          ${
+            mobile
+              ? "language-dropdown-trigger--mobile"
+              : ""
+          }
+        `}
+        aria-label={t(
+          "Seleccionar idioma",
+          "Select language"
+        )}
+        aria-expanded={
+          open
+        }
+      >
+
+        <img
+          src={
+            currentFlag
+          }
+          alt=""
+          className="language-dropdown-flag"
+        />
+
+
+        <ChevronDown
+          size={
+            mobile
+              ? 13
+              : 14
+          }
+          className={`
+            language-dropdown-chevron
+
+            ${
+              open
+                ? "language-dropdown-chevron--open"
+                : ""
+            }
+          `}
+        />
+
+      </button>
+
+
+      <div
+        className={`
+          language-dropdown-menu
+
+          ${
+            mobile
+              ? "language-dropdown-menu--mobile"
+              : ""
+          }
+
+          ${
+            open
+              ? "language-dropdown-menu--open"
+              : ""
+          }
+        `}
+      >
+
+        <button
+          type="button"
+          onClick={() =>
+            selectLanguage(
+              "es"
+            )
+          }
+          className={`
+            language-dropdown-item
+
+            ${
+              language ===
+              "es"
+                ? "language-dropdown-item--active"
+                : ""
+            }
+          `}
+          aria-label="Español"
+        >
+          <img
+            src={mxFlag}
+            alt="México"
+          />
+        </button>
+
+
+        <button
+          type="button"
+          onClick={() =>
+            selectLanguage(
+              "en"
+            )
+          }
+          className={`
+            language-dropdown-item
+
+            ${
+              language ===
+              "en"
+                ? "language-dropdown-item--active"
+                : ""
+            }
+          `}
+          aria-label="English"
+        >
+          <img
+            src={usFlag}
+            alt="United States"
+          />
+        </button>
+
+      </div>
+
+    </div>
   )
 }
 
