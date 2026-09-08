@@ -1,6 +1,6 @@
 import chemoursImg from "../assets/images/projects/chemours-tr1.jpg"
 import cryoinfraImg from "../assets/images/projects/cryoinfra-aislamiento.jpg"
-import dynasolImg from "../assets/images/projects/dynasol-ponton.jpg"
+import dynasolImg from "../assets/images/projects/dynasol-porton.jpg"
 import sinoxisImg from "../assets/images/projects/sinoxis-plataforma.jpg"
 import vibrantsImg from "../assets/images/projects/vibrants-lifters.jpg"
 import vopakImg from "../assets/images/projects/vopak-meg.jpg"
@@ -52,18 +52,18 @@ export const projects = [
 
 
   {
-    id: "dynasol-ponton",
-    slug: "dynasol-ponton",
+    id: "dynasol-porton",
+    slug: "dynasol-porton",
     number: "02",
 
     client: "DYNASOL",
 
     title: {
       es:
-        "Fabricación de pontón",
+        "Fabricación de portón",
 
       en:
-        "Pontoon fabrication",
+        "Gate fabrication",
     },
 
     location: {
@@ -83,10 +83,10 @@ export const projects = [
 
     work: {
       es:
-        "Fabricación y trabajos metalmecánicos para componente tipo pontón.",
+        "Fabricación y trabajos metalmecánicos para componente tipo portón.",
 
       en:
-        "Fabrication and metalworking for a pontoon-type component.",
+        "Fabrication and metalworking for a gate-type component.",
     },
 
     image: dynasolImg,
