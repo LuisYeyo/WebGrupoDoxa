@@ -1,0 +1,25 @@
+{
+  "redirects": [
+    {
+      "source": "/nuestros-servicios",
+      "destination": "/servicios",
+      "permanent": true
+    },
+    {
+      "source": "/doxa-mantenimiento",
+      "destination": "/mantenimiento-industrial-doxa",
+      "permanent": true
+    },
+    {
+      "source": "/doxa1",
+      "destination": "/doxa",
+      "permanent": true
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "destination": "/index.html"
+    }
+  ]
+}
