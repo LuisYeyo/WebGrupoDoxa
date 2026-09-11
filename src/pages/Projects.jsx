@@ -50,6 +50,12 @@ const filters = [
   },
 
   {
+    value: "tanks",
+    es: "Tanques y equipos",
+    en: "Tanks & equipment",
+  },
+
+  {
     value: "insulation",
     es: "Aislamiento",
     en: "Insulation",
@@ -60,10 +66,23 @@ const filters = [
     es: "Mantenimiento",
     en: "Maintenance",
   },
+
+  {
+    value: "drilling",
+    es: "Perforación",
+    en: "Drilling",
+  },
+
+  {
+    value: "sandblast",
+    es: "Sandblast y pintura",
+    en: "Sandblasting & painting",
+  },
 ]
 
 
 function Projects() {
+
   const {
     language,
     t,
@@ -79,6 +98,7 @@ function Projects() {
   const filteredProjects =
     useMemo(
       () => {
+
         if (
           activeFilter ===
           "all"
@@ -91,6 +111,7 @@ function Projects() {
             project.service ===
             activeFilter
         )
+
       },
       [
         activeFilter,
@@ -102,14 +123,11 @@ function Projects() {
     <main className="projects-page">
 
 
-      {/* =====================================================
-          HERO
-      ===================================================== */}
+      {/* HERO */}
 
       <section className="projects-hero">
 
         <div className="projects-container projects-hero-grid">
-
 
           <div>
 
@@ -164,10 +182,12 @@ function Projects() {
           >
 
             <p className="projects-hero-description">
+
               {t(
-                "Una selección de trabajos realizados para clientes industriales en diferentes servicios y alcances.",
-                "A selection of work completed for industrial clients across different services and project scopes."
+                "Experiencia documentada en fabricación, estructuras, tubería, mantenimiento, aislamiento, sandblast, pintura, equipos y cimentaciones industriales.",
+                "Documented experience in fabrication, structures, piping, maintenance, insulation, sandblasting, painting, industrial equipment and foundation work."
               )}
+
             </p>
 
           </PageReveal>
@@ -177,9 +197,7 @@ function Projects() {
       </section>
 
 
-      {/* =====================================================
-          FILTERS
-      ===================================================== */}
+      {/* FILTROS */}
 
       <section className="projects-filter-section">
 
@@ -197,9 +215,11 @@ function Projects() {
 
                   <button
                     type="button"
+
                     key={
                       filter.value
                     }
+
                     className={`
                       projects-filter
 
@@ -210,17 +230,20 @@ function Projects() {
                           : ""
                       }
                     `}
+
                     onClick={() =>
                       setActiveFilter(
                         filter.value
                       )
                     }
                   >
+
                     {
                       filter[
                         language
                       ]
                     }
+
                   </button>
 
                 )
@@ -235,9 +258,7 @@ function Projects() {
       </section>
 
 
-      {/* =====================================================
-          PROJECT GRID
-      ===================================================== */}
+      {/* PROYECTOS */}
 
       <section className="projects-grid-section">
 
@@ -255,12 +276,15 @@ function Projects() {
                   key={
                     project.slug
                   }
+
                   delay={
                     0.04 +
                     (index % 4) *
                       0.07
                   }
+
                   y={30}
+
                   className="project-reveal-item"
                 >
 
@@ -276,6 +300,7 @@ function Projects() {
                         src={
                           project.image
                         }
+
                         alt={
                           project.title[
                             language
@@ -287,19 +312,6 @@ function Projects() {
                       <span className="project-card-client">
                         {
                           project.client
-                        }
-                      </span>
-
-
-                      <span className="project-card-number">
-                        {
-                          project.number ||
-                          String(
-                            index + 1
-                          ).padStart(
-                            2,
-                            "0"
-                          )
                         }
                       </span>
 
@@ -333,11 +345,13 @@ function Projects() {
                           />
 
                           <span>
+
                             {
                               project.location[
                                 language
                               ]
                             }
+
                           </span>
 
                         </div>
@@ -350,12 +364,14 @@ function Projects() {
                           />
 
                           <span>
+
                             {
                               project
                                 .serviceLabel[
-                                language
-                              ]
+                                  language
+                                ]
                             }
+
                           </span>
 
                         </div>
@@ -364,11 +380,13 @@ function Projects() {
 
 
                       <p className="project-card-work">
+
                         {
                           project.work[
                             language
                           ]
                         }
+
                       </p>
 
 
@@ -376,6 +394,7 @@ function Projects() {
                         to={`/proyectos/${project.slug}`}
                         className="project-card-link"
                       >
+
                         {t(
                           "Ver proyecto",
                           "View project"
@@ -384,6 +403,7 @@ function Projects() {
                         <ArrowRight
                           size={16}
                         />
+
                       </Link>
 
                     </div>

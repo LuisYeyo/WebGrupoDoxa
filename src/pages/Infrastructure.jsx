@@ -14,6 +14,11 @@ import {
   useLanguage,
 } from "../context/LanguageContext"
 
+import doxaLogo from "../assets/images/companies/doxa.jpg"
+import remsaLogo from "../assets/images/companies/remsa.jpg"
+import secmimarLogo from "../assets/images/companies/secmimar.jpg"
+import doxaMaintenanceLogo from "../assets/images/companies/doxa-maintenance.jpg"
+
 
 // =========================================================
 // FOTOS REALES
@@ -166,8 +171,14 @@ const workshops = [
     },
 
     companies: [
-      "DOXA",
-      "REMSA",
+      {
+        name: "DOXA",
+        logo: doxaLogo,
+      },
+      {
+        name: "REMSA",
+        logo: remsaLogo,
+      },
     ],
 
     subtitle: {
@@ -241,8 +252,14 @@ const workshops = [
     },
 
     companies: [
-      "DOXA",
-      "REMSA",
+      {
+        name: "DOXA",
+        logo: doxaLogo,
+      },
+      {
+        name: "REMSA",
+        logo: remsaLogo,
+      },
     ],
 
     subtitle: {
@@ -307,8 +324,14 @@ const workshops = [
     },
 
     companies: [
-      "SECMIMAR",
-      "MANTENIMIENTO INDUSTRIAL DOXA",
+      {
+        name: "SECMIMAR",
+        logo: secmimarLogo,
+      },
+      {
+        name: "Mantenimiento Industrial DOXA",
+        logo: doxaMaintenanceLogo,
+      },
     ],
 
     subtitle: {
@@ -764,22 +787,42 @@ function Infrastructure() {
                     </span>
 
 
-                    <strong>
-                      {
-                        item.title[
-                          language
-                        ]
-                      }
-                    </strong>
+                    <div className="infra-tab-main">
 
+                      <div className="infra-tab-copy">
 
-                    <span className="infra-tab-companies">
+                        <strong>
+                          {item.title[language]}
+                        </strong>
 
-                      {item.companies.join(
-                        " · "
-                      )}
+                        <span className="infra-tab-companies">
+                          {item.companies
+                            .map((company) => company.name)
+                            .join(" · ")}
+                        </span>
 
-                    </span>
+                      </div>
+
+                      <div className="infra-tab-company-logos">
+
+                        {item.companies.map(
+                          (company) => (
+                            <div
+                              key={company.name}
+                              className="infra-tab-company-logo"
+                              title={company.name}
+                            >
+                              <img
+                                src={company.logo}
+                                alt={company.name}
+                              />
+                            </div>
+                          )
+                        )}
+
+                      </div>
+
+                    </div>
 
                   </button>
                 )
@@ -941,20 +984,10 @@ function Infrastructure() {
               <div className="infra-company-list">
 
                 {workshop.companies.map(
-                  (
-                    company
-                  ) => (
-
-                    <span
-                      key={
-                        company
-                      }
-                    >
-                      {
-                        company
-                      }
+                  (company) => (
+                    <span key={company.name}>
+                      {company.name}
                     </span>
-
                   )
                 )}
 

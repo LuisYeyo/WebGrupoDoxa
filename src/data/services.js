@@ -20,20 +20,24 @@ import drilling2 from "../assets/images/processes/drilling/02-equipo.jpg";
 import drilling3 from "../assets/images/processes/drilling/03-perforacion.jpg";
 import drilling4 from "../assets/images/processes/drilling/04-resultado.jpg";
 
-/*
-  AJUSTA ESTOS NOMBRES SI TU CARPETA tanks
-  USA OTROS NOMBRES.
-*/
-
 import tank1 from "../assets/images/processes/tanks/01-inspection.jpg";
 import tank2 from "../assets/images/processes/tanks/02-preparation.jpg";
 import tank3 from "../assets/images/processes/tanks/03-repair.jpg";
 import tank4 from "../assets/images/processes/tanks/04-result.jpg";
 
+import sandblast1 from "../assets/images/processes/sandblast/01-preparacion.jpg";
+import sandblast2 from "../assets/images/processes/sandblast/02-aplicacion-pintura.jpg";
+import sandblast3 from "../assets/images/processes/sandblast/03-resultado.jpg";
+
+
 const services = [
+
+  /* =========================================================
+     TUBERÍA INDUSTRIAL
+  ========================================================= */
+
   {
     slug: "tuberia-industrial",
-    number: "01",
 
     name: {
       es: "Tubería industrial",
@@ -91,46 +95,58 @@ const services = [
           es: "Preparación",
           en: "Preparation",
         },
+
         description: {
           es:
             "Selección, revisión y preparación inicial del material requerido para fabricación.",
           en:
             "Selection, inspection and initial preparation of the material required for fabrication.",
         },
+
         image: piping1,
       },
+
       {
         title: {
           es: "Formado y fabricación",
           en: "Forming and fabrication",
         },
+
         description: {
           es:
             "Conformado, ajuste y fabricación de los elementos conforme al proyecto.",
           en:
             "Forming, fitting and fabrication of components according to project requirements.",
         },
+
         image: piping2,
       },
+
       {
         title: {
           es: "Control e inspección",
           en: "Control and inspection",
         },
+
         description: {
           es:
             "Revisión del trabajo terminado antes de su montaje o entrega.",
           en:
             "Inspection of completed work prior to installation or delivery.",
         },
+
         image: piping3,
       },
     ],
   },
 
+
+  /* =========================================================
+     ESTRUCTURAS METÁLICAS
+  ========================================================= */
+
   {
     slug: "estructuras-metalicas",
-    number: "02",
 
     name: {
       es: "Estructuras metálicas",
@@ -188,46 +204,58 @@ const services = [
           es: "Preparación",
           en: "Preparation",
         },
+
         description: {
           es:
             "Preparación de perfiles y elementos de acuerdo con las dimensiones del proyecto.",
           en:
             "Preparation of profiles and components according to project dimensions.",
         },
+
         image: structure1,
       },
+
       {
         title: {
           es: "Armado",
           en: "Assembly",
         },
+
         description: {
           es:
             "Ensamble de los componentes estructurales previo a su instalación.",
           en:
             "Assembly of structural components prior to installation.",
         },
+
         image: structure2,
       },
+
       {
         title: {
           es: "Inspección",
           en: "Inspection",
         },
+
         description: {
           es:
             "Revisión dimensional y visual del conjunto estructural.",
           en:
             "Dimensional and visual inspection of the structural assembly.",
         },
+
         image: structure3,
       },
     ],
   },
 
+
+  /* =========================================================
+     TANQUES Y EQUIPOS
+  ========================================================= */
+
   {
     slug: "tanques-y-equipos",
-    number: "03",
 
     name: {
       es: "Tanques y equipos",
@@ -285,59 +313,74 @@ const services = [
           es: "Inspección",
           en: "Inspection",
         },
+
         description: {
           es:
             "Revisión dimensional y visual del equipo.",
           en:
             "Dimensional and visual inspection of the equipment.",
         },
+
         image: tank1,
       },
+
       {
         title: {
           es: "Preparación",
           en: "Preparation",
         },
+
         description: {
           es:
             "Preparación del material y del equipo previo a la intervención.",
           en:
             "Preparation of materials and equipment before intervention.",
         },
+
         image: tank2,
       },
+
       {
         title: {
           es: "Reparación",
           en: "Repair",
         },
+
         description: {
           es:
             "Reparación del equipo dañado. Incluye soldadura, reemplazo de piezas y ajustes.",
           en:
             "Repair of damaged equipment. Includes welding, part replacement and adjustments.",
         },
+
         image: tank3,
       },
+
       {
         title: {
           es: "Resultado",
           en: "Result",
         },
+
         description: {
           es:
             "Revisión final y liberación del equipo después de la intervención.",
           en:
             "Final inspection and release of the equipment after intervention.",
         },
+
         image: tank4,
       },
     ],
   },
 
+
+  /* =========================================================
+     AISLAMIENTO INDUSTRIAL
+  ========================================================= */
+
   {
     slug: "aislamiento-industrial",
-    number: "04",
 
     name: {
       es: "Aislamiento industrial",
@@ -395,59 +438,74 @@ const services = [
           es: "Preparación de superficie",
           en: "Surface preparation",
         },
+
         description: {
           es:
             "Revisión y preparación del área antes de colocar el material aislante.",
           en:
             "Inspection and preparation of the area before insulation material is installed.",
         },
+
         image: isolation1,
       },
+
       {
         title: {
           es: "Corte",
           en: "Cutting",
         },
+
         description: {
           es:
             "Dimensionado y corte del material de aislamiento conforme a la geometría requerida.",
           en:
             "Sizing and cutting of insulation material according to the required geometry.",
         },
+
         image: isolation2,
       },
+
       {
         title: {
           es: "Colocación",
           en: "Installation",
         },
+
         description: {
           es:
             "Instalación y ajuste del aislamiento sobre la tubería o equipo.",
           en:
             "Installation and adjustment of insulation around piping or equipment.",
         },
+
         image: isolation3,
       },
+
       {
         title: {
           es: "Acabado",
           en: "Finishing",
         },
+
         description: {
           es:
             "Terminación y revisión final del sistema aislado.",
           en:
             "Final finishing and inspection of the insulated system.",
         },
+
         image: isolation4,
       },
     ],
   },
 
+
+  /* =========================================================
+     MANTENIMIENTO INDUSTRIAL
+  ========================================================= */
+
   {
     slug: "mantenimiento-industrial",
-    number: "05",
 
     name: {
       es: "Mantenimiento industrial",
@@ -505,46 +563,58 @@ const services = [
           es: "Recepción y evaluación",
           en: "Reception and evaluation",
         },
+
         description: {
           es:
             "Revisión inicial del equipo para identificar el alcance de mantenimiento requerido.",
           en:
             "Initial equipment inspection to determine the required maintenance scope.",
         },
+
         image: maintenance1,
       },
+
       {
         title: {
           es: "Intervención",
           en: "Intervention",
         },
+
         description: {
           es:
             "Ejecución de trabajos preventivos o correctivos sobre el equipo.",
           en:
             "Execution of preventive or corrective maintenance work.",
         },
+
         image: maintenance2,
       },
+
       {
         title: {
           es: "Resultado",
           en: "Result",
         },
+
         description: {
           es:
             "Revisión final y liberación del equipo después de la intervención.",
           en:
             "Final inspection and release of the equipment after maintenance.",
         },
+
         image: maintenance3,
       },
     ],
   },
 
+
+  /* =========================================================
+     PERFORACIÓN
+  ========================================================= */
+
   {
     slug: "perforacion",
-    number: "06",
 
     name: {
       es: "Perforación",
@@ -602,55 +672,176 @@ const services = [
           es: "Vista general",
           en: "Project overview",
         },
+
         description: {
           es:
             "Vista del sitio y condiciones generales donde se desarrolla el trabajo.",
           en:
             "Overall view of the site and conditions where the work is performed.",
         },
+
         image: drilling1,
       },
+
       {
         title: {
           es: "Equipo en sitio",
           en: "Equipment on site",
         },
+
         description: {
           es:
             "Posicionamiento y preparación de la maquinaria para comenzar la operación.",
           en:
             "Positioning and preparation of machinery before drilling begins.",
         },
+
         image: drilling2,
       },
+
       {
         title: {
           es: "Perforación",
           en: "Drilling",
         },
+
         description: {
           es:
             "Ejecución del proceso de perforación conforme al alcance del proyecto.",
           en:
             "Execution of drilling operations according to project requirements.",
         },
+
         image: drilling3,
       },
+
       {
         title: {
           es: "Resultado",
           en: "Result",
         },
+
         description: {
           es:
             "Vista del avance o resultado obtenido durante los trabajos.",
           en:
             "View of the progress or result achieved during the work.",
         },
+
         image: drilling4,
       },
     ],
   },
+
+
+  /* =========================================================
+     SANDBLAST Y PINTURA
+  ========================================================= */
+
+  {
+    slug: "sandblast-y-pintura",
+
+    name: {
+      es: "Sandblast y pintura",
+      en: "Sandblasting and painting",
+    },
+
+    shortDescription: {
+      es:
+        "Preparación y protección de superficies metálicas mediante limpieza, acondicionamiento y aplicación de recubrimientos industriales.",
+      en:
+        "Preparation and protection of metallic surfaces through cleaning, conditioning and industrial coating application.",
+    },
+
+    intro: {
+      es:
+        "Realizamos trabajos de preparación superficial y aplicación de recubrimientos para proteger estructuras, tanques y equipos industriales contra corrosión y deterioro.",
+      en:
+        "We perform surface preparation and coating application to protect industrial structures, tanks and equipment against corrosion and deterioration.",
+    },
+
+    highlights: [
+      {
+        es: "Preparación de superficie",
+        en: "Surface preparation",
+      },
+      {
+        es: "Limpieza y acondicionamiento",
+        en: "Cleaning and conditioning",
+      },
+      {
+        es: "Aplicación de pintura",
+        en: "Paint application",
+      },
+      {
+        es: "Inspección de acabado",
+        en: "Finish inspection",
+      },
+    ],
+
+    processTitle: {
+      es: "Proceso de preparación y recubrimiento",
+      en: "Surface preparation and coating process",
+    },
+
+    processDescription: {
+      es:
+        "Secuencia representativa de un trabajo de preparación superficial, aplicación de recubrimiento y acabado final en equipo industrial.",
+      en:
+        "Representative sequence of surface preparation, coating application and final finishing on industrial equipment.",
+    },
+
+    processSteps: [
+      {
+        title: {
+          es: "Preparación de superficie",
+          en: "Surface preparation",
+        },
+
+        description: {
+          es:
+            "Inspección y preparación inicial de la superficie para retirar contaminantes, residuos y zonas deterioradas antes de aplicar el recubrimiento.",
+          en:
+            "Inspection and initial surface preparation to remove contaminants, residues and deteriorated areas before coating application.",
+        },
+
+        image: sandblast1,
+      },
+
+      {
+        title: {
+          es: "Aplicación de recubrimiento",
+          en: "Coating application",
+        },
+
+        description: {
+          es:
+            "Aplicación controlada del sistema de pintura o recubrimiento especificado para proteger la superficie metálica.",
+          en:
+            "Controlled application of the specified paint or coating system to protect the metallic surface.",
+        },
+
+        image: sandblast2,
+      },
+
+      {
+        title: {
+          es: "Acabado final",
+          en: "Final finish",
+        },
+
+        description: {
+          es:
+            "Revisión visual del acabado, cobertura y condición final de la superficie intervenida.",
+          en:
+            "Visual inspection of the finish, coverage and final condition of the treated surface.",
+        },
+
+        image: sandblast3,
+      },
+    ],
+  },
 ];
+
 
 export default services;

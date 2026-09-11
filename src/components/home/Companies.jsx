@@ -159,7 +159,7 @@ function Companies() {
                       grid
                       w-full
                       cursor-pointer
-                      grid-cols-[50px_1fr_auto]
+                      grid-cols-[1fr_auto]
                       items-center
                       gap-4
                       border-0
@@ -177,17 +177,6 @@ function Companies() {
                       }
                     `}
                   >
-
-                    <span
-                      className="
-                        text-xs
-                        font-semibold
-                        tracking-[0.2em]
-                        text-slate-400
-                      "
-                    >
-                      {company.number}
-                    </span>
 
                     <span
                       className="
@@ -232,22 +221,8 @@ function Companies() {
 
             <div className="sticky top-24">
 
-              <p
-                className="
-                  text-xs
-                  font-semibold
-                  tracking-[0.25em]
-                  text-blue-600
-                "
-              >
-                {activeCompany.number}
-                {" / "}
-                {activeCompany.shortName}
-              </p>
-
               <h3
                 className="
-                  mt-5
                   text-3xl
                   font-bold
                   tracking-tight

@@ -8,19 +8,10 @@ function Doxa() {
 
   return (
     <main className="company-page">
-
-      <section className="company-hero">
-
+      <section className="company-hero company-hero--doxa">
         <div className="company-container company-hero-grid">
-
           <div>
-            <p className="company-eyebrow">
-              01 / DOXA
-            </p>
-
-            <h1>
-              Grupo Industrial DOXA
-            </h1>
+            <h1>Grupo Industrial DOXA</h1>
 
             <p className="company-hero-subtitle">
               {t(
@@ -36,15 +27,11 @@ function Doxa() {
               "Company specialized in industrial solutions, metal fabrication, maintenance and project execution across multiple sectors."
             )}
           </p>
-
         </div>
-
       </section>
 
       <section className="company-content-section">
-
         <div className="company-container company-content-grid">
-
           <div>
             <p className="company-eyebrow">
               {t("CAPACIDADES", "CAPABILITIES")}
@@ -59,21 +46,16 @@ function Doxa() {
           </div>
 
           <div className="company-capability-list">
-
             <span>{t("Fabricación", "Fabrication")}</span>
             <span>{t("Tubería industrial", "Industrial piping")}</span>
             <span>{t("Estructuras metálicas", "Steel structures")}</span>
             <span>{t("Tanques y equipos", "Tanks and equipment")}</span>
             <span>{t("Mantenimiento", "Maintenance")}</span>
-
           </div>
-
         </div>
-
       </section>
 
       <CompanyCTA t={t} />
-
     </main>
   );
 }
@@ -82,9 +64,7 @@ function CompanyCTA({ t }) {
   return (
     <section className="company-cta-section">
       <div className="company-container">
-
         <div className="company-cta">
-
           <div>
             <p className="company-eyebrow">
               {t("TRABAJEMOS JUNTOS", "LET'S WORK TOGETHER")}
@@ -102,9 +82,7 @@ function CompanyCTA({ t }) {
             {t("Solicitar cotización", "Request a quote")}
             <ArrowRight size={17} />
           </Link>
-
         </div>
-
       </div>
     </section>
   );

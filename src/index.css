@@ -9643,3 +9643,672 @@ body {
   }
 
 }
+/* =========================================================
+   LIMPIEZA DE ÍNDICES NUMÉRICOS
+   Oculta 01 / 02 / 03 decorativos
+   Mantiene contadores reales de fotografías
+========================================================= */
+
+
+/* SERVICIOS — 01, 02, 03... */
+
+.service-number {
+  display: none !important;
+}
+
+
+/* INFRAESTRUCTURA — número de cada tab Taller 1 / 2 / 3 */
+
+.infra-tab-number {
+  display: none !important;
+}
+
+
+/* INFRAESTRUCTURA — "01 / TALLER" dentro de la tarjeta */
+
+.infra-workshop-kicker {
+  display: none !important;
+}
+
+
+/* INFRAESTRUCTURA — índices decorativos en estadísticas */
+
+.infra-stat-index {
+  display: none !important;
+}
+
+
+/* PROYECTOS — 01 / 02 encima de las fotografías */
+
+.project-card-number {
+  display: none !important;
+}
+
+
+/* RENTA — número del equipo arriba de la fotografía */
+
+.rental-card-number {
+  display: none !important;
+}
+
+
+/* IMPORTANTE:
+   NO ocultamos estos porque sí muestran progreso real:
+   
+   .rental-image-counter
+   .infra-image-counter
+   .process-counter
+*/
+.infra-tab strong {
+  margin-top: 0;
+}
+/* =========================================================
+   INFRASTRUCTURE — LOGOS DE EMPRESAS EN TALLERES
+========================================================= */
+
+
+/* LOGOS DENTRO DE LAS TABS */
+
+.infra-tab-company-logos {
+  margin-top: 12px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+}
+
+
+.infra-tab-company-logo {
+  width: 42px;
+  height: 30px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+
+  padding: 4px;
+
+  border: 1px solid #e2e8f0;
+
+  border-radius: 8px;
+
+  background: #ffffff;
+}
+
+
+.infra-tab-company-logo img {
+  width: 100%;
+  height: 100%;
+
+  object-fit: contain;
+
+  display: block;
+}
+
+
+/* =========================================
+   LOGOS DENTRO DE LA TARJETA DEL TALLER
+========================================= */
+
+.infra-company-list {
+  margin-top: 27px;
+
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 10px;
+}
+
+
+.infra-company-badge {
+  min-height: 42px;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 9px;
+
+  padding: 6px 12px 6px 7px;
+
+  border: 1px solid #e0e7f0;
+
+  border-radius: 999px;
+
+  background: #ffffff;
+}
+
+
+.infra-company-badge img {
+  width: 30px;
+  height: 30px;
+
+  object-fit: contain;
+
+  border-radius: 6px;
+}
+
+
+.infra-company-badge span {
+  color: #42536d;
+
+  font-size: 10px;
+
+  font-weight: 600;
+
+  letter-spacing: 0.06em;
+
+  text-transform: uppercase;
+}
+
+
+/* MOBILE */
+
+@media (max-width: 600px) {
+
+  .infra-tab-company-logo {
+    width: 38px;
+    height: 28px;
+  }
+
+  .infra-company-badge {
+    width: 100%;
+  }
+}
+/* =========================================================
+   INFRASTRUCTURE — EMPRESAS EN TABS
+   Texto + mini logos laterales
+========================================================= */
+
+.infra-tab-main {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+}
+
+.infra-tab-copy {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.infra-tab-copy strong {
+  margin-top: 0;
+}
+
+.infra-tab-companies {
+  margin-top: 9px;
+
+  color: #8a98ad;
+
+  font-size: 10px;
+  line-height: 1.4;
+
+  font-weight: 600;
+
+  letter-spacing: 0.08em;
+
+  text-transform: uppercase;
+}
+
+.infra-tab-company-logos {
+  margin-top: 0;
+
+  display: flex;
+  align-items: center;
+
+  gap: 6px;
+
+  flex-shrink: 0;
+}
+
+.infra-tab-company-logo {
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+
+  padding: 4px;
+
+  border: 1px solid #e2e8f0;
+
+  border-radius: 9px;
+
+  background: #ffffff;
+}
+
+.infra-tab-company-logo img {
+  width: 100%;
+  height: 100%;
+
+  object-fit: contain;
+
+  display: block;
+}
+
+
+/* =========================================================
+   TARJETA GRANDE — REGRESAR A TEXTO
+========================================================= */
+
+.infra-company-list {
+  margin-top: 27px;
+
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 8px;
+}
+
+.infra-company-list span {
+  padding: 8px 13px;
+
+  border-radius: 999px;
+
+  background: #0a2547;
+
+  color: #ffffff;
+
+  font-size: 10px;
+
+  font-weight: 600;
+
+  letter-spacing: 0.08em;
+
+  text-transform: uppercase;
+}
+
+
+/* Desactiva estilos viejos de badges con logo */
+
+.infra-company-badge {
+  display: contents;
+}
+
+.infra-company-badge img {
+  display: none;
+}
+
+
+/* MOBILE */
+
+@media (max-width: 600px) {
+
+  .infra-tab-main {
+    gap: 12px;
+  }
+
+  .infra-tab-company-logo {
+    width: 30px;
+    height: 30px;
+  }
+
+  .infra-tab-companies {
+    font-size: 9px;
+  }
+}
+.projects-empty-state {
+  padding: 70px 0 20px;
+  text-align: center;
+}
+
+.projects-empty-state p {
+  margin: 0;
+  color: #718097;
+  font-size: 15px;
+}
+/* =========================================================
+   COMPANY HERO COLORS
+   SOLO COLORES — NO MODIFICA TIPOGRAFÍA
+========================================================= */
+
+.company-hero {
+  color: #ffffff;
+}
+
+
+/* DOXA */
+
+.company-hero--doxa,
+.company-hero-doxa {
+  background:
+    radial-gradient(
+      circle at 85% 10%,
+      rgba(52, 114, 219, 0.22),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      #061326 0%,
+      #09264b 55%,
+      #123a73 100%
+    ) !important;
+}
+
+
+/* REMSA */
+
+.company-hero--remsa,
+.company-hero-remsa {
+  background:
+    radial-gradient(
+      circle at 85% 10%,
+      rgba(255, 135, 90, 0.12),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      #2a0907 0%,
+      #611711 52%,
+      #9a2e1d 100%
+    ) !important;
+}
+
+
+/* SECMIMAR */
+
+.company-hero--secmimar,
+.company-hero-secmimar {
+  background:
+    linear-gradient(
+      120deg,
+      #073477 0%,
+      #0867ba 22%,
+      #079cc2 43%,
+      #20a86f 65%,
+      #d5b51a 84%,
+      #e4a016 100%
+    ) !important;
+}
+
+
+/* MANTENIMIENTO INDUSTRIAL DOXA */
+
+.company-hero--maintenance,
+.company-hero-doxa-maintenance {
+  background:
+    radial-gradient(
+      circle at 85% 10%,
+      rgba(71, 124, 210, 0.18),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      #041225 0%,
+      #07244a 55%,
+      #0c3973 100%
+    ) !important;
+}
+
+
+/* SOLO COLORES DE TEXTO */
+
+.company-hero h1 {
+  color: #ffffff !important;
+}
+
+.company-hero-subtitle {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+.company-hero-description {
+  color: rgba(255, 255, 255, 0.86) !important;
+}
+
+/* =========================================================
+   COMPANY HERO BACKGROUNDS
+========================================================= */
+
+.company-hero--doxa {
+  background:
+    linear-gradient(
+      135deg,
+      #06152f 0%,
+      #0b2552 52%,
+      #123975 100%
+    );
+}
+
+.company-hero--remsa {
+  background:
+    linear-gradient(
+      135deg,
+      #5a180d 0%,
+      #7f2815 45%,
+      #a53a1e 100%
+    );
+}
+
+.company-hero--secmimar {
+  background:
+    linear-gradient(
+      135deg,
+      #0b2a88 0%,
+      #1560d8 28%,
+      #3f7cff 50%,
+      #6b5cff 72%,
+      #a33fa2 100%
+    );
+}
+
+.company-hero--maintenance {
+  background:
+    linear-gradient(
+      135deg,
+      #071426 0%,
+      #0b2145 55%,
+      #183b74 100%
+    );
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 980px) {
+  .company-hero {
+    padding: 88px 0 76px;
+  }
+
+  .company-hero-grid,
+  .company-content-grid {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+
+  .company-hero-description {
+    justify-self: start;
+    max-width: 100%;
+  }
+
+  .company-capability-list {
+    grid-template-columns: 1fr;
+  }
+
+  .company-cta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .company-container {
+    width: min(100% - 32px, 1320px);
+  }
+
+  .company-hero {
+    padding: 72px 0 62px;
+  }
+
+  .company-content-section {
+    padding: 72px 0;
+  }
+
+  .company-cta-section {
+    padding: 0 0 72px;
+  }
+
+  .company-cta {
+    padding: 28px;
+    border-radius: 24px;
+  }
+
+  .company-capability-list {
+    border-radius: 22px;
+  }
+
+  .company-capability-list span {
+    padding: 22px 22px;
+    font-size: 15px;
+  }
+}
+/* =========================================================
+   FIX — GRUPO / COMPANY COLORS
+   Conserva tipografía existente
+========================================================= */
+
+/* ---------------------------------------------------------
+   GRUPO — HERO AZUL MARINO
+--------------------------------------------------------- */
+
+.group-hero {
+  background: #071426 !important;
+  color: #ffffff !important;
+}
+
+.group-hero h1,
+.group-hero h2,
+.group-hero p {
+  color: inherit;
+}
+
+.group-hero .group-eyebrow {
+  color: #6ea6ff !important;
+}
+
+.group-hero .group-description {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
+
+/* ---------------------------------------------------------
+   COMPANY HERO
+   SOLO CAMBIAMOS FONDO Y COLOR.
+   NO FONT / NO SIZE / NO LETTER-SPACING.
+--------------------------------------------------------- */
+
+.company-hero {
+  color: #ffffff;
+}
+
+
+/* DOXA */
+
+.company-hero--doxa,
+.company-hero-doxa {
+  background:
+    radial-gradient(
+      circle at 85% 10%,
+      rgba(52, 114, 219, 0.24),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      #061326 0%,
+      #09264b 55%,
+      #123a73 100%
+    ) !important;
+}
+
+
+/* REMSA */
+
+.company-hero--remsa,
+.company-hero-remsa {
+  background:
+    radial-gradient(
+      circle at 85% 10%,
+      rgba(255, 150, 100, 0.12),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      #2a0907 0%,
+      #611711 52%,
+      #9a2e1d 100%
+    ) !important;
+}
+
+
+/* SECMIMAR
+   Azul → cian → verde → amarillo
+*/
+
+.company-hero--secmimar,
+.company-hero-secmimar {
+  background:
+    radial-gradient(
+      circle at 15% 10%,
+      rgba(255, 255, 255, 0.10),
+      transparent 30%
+    ),
+    linear-gradient(
+      120deg,
+      #073477 0%,
+      #0867ba 23%,
+      #079cc2 43%,
+      #20a86f 65%,
+      #d5b51a 84%,
+      #e4a016 100%
+    ) !important;
+}
+
+
+/* MANTENIMIENTO INDUSTRIAL DOXA */
+
+.company-hero--maintenance,
+.company-hero-doxa-maintenance {
+  background:
+    radial-gradient(
+      circle at 85% 10%,
+      rgba(71, 124, 210, 0.18),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      #041225 0%,
+      #07244a 55%,
+      #0c3973 100%
+    ) !important;
+}
+
+
+/* ---------------------------------------------------------
+   TEXTO EN HERO DE EMPRESAS
+   SOLO COLOR — la tipografía queda intacta
+--------------------------------------------------------- */
+
+.company-hero h1 {
+  color: #ffffff !important;
+}
+
+.company-hero-subtitle {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+.company-hero-description {
+  color: rgba(255, 255, 255, 0.86) !important;
+}

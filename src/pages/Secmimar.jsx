@@ -8,19 +8,10 @@ function Secmimar() {
 
   return (
     <main className="company-page">
-
-      <section className="company-hero">
-
+      <section className="company-hero company-hero--secmimar">
         <div className="company-container company-hero-grid">
-
           <div>
-            <p className="company-eyebrow">
-              03 / SECMIMAR
-            </p>
-
-            <h1>
-              SECMIMAR
-            </h1>
+            <h1>SECMIMAR</h1>
 
             <p className="company-hero-subtitle">
               {t(
@@ -36,15 +27,11 @@ function Secmimar() {
               "Company involved in fabrication, welding and industrial equipment work within the group's operational capacity."
             )}
           </p>
-
         </div>
-
       </section>
 
       <section className="company-content-section">
-
         <div className="company-container company-content-grid">
-
           <div>
             <p className="company-eyebrow">
               {t("ESPECIALIDAD", "SPECIALTY")}
@@ -59,20 +46,15 @@ function Secmimar() {
           </div>
 
           <div className="company-capability-list">
-
             <span>{t("Soldadura", "Welding")}</span>
             <span>{t("Fabricación", "Fabrication")}</span>
             <span>{t("Equipos industriales", "Industrial equipment")}</span>
             <span>{t("Preparación superficial", "Surface preparation")}</span>
-
           </div>
-
         </div>
-
       </section>
 
       <CompanyCTA t={t} />
-
     </main>
   );
 }
@@ -82,11 +64,8 @@ function CompanyCTA({ t }) {
     <section className="company-cta-section">
       <div className="company-container">
         <div className="company-cta">
-
           <div>
-            <p className="company-eyebrow">
-              SECMIMAR
-            </p>
+            <p className="company-eyebrow">SECMIMAR</p>
 
             <h2>
               {t(
@@ -100,7 +79,6 @@ function CompanyCTA({ t }) {
             {t("Solicitar cotización", "Request a quote")}
             <ArrowRight size={17} />
           </Link>
-
         </div>
       </div>
     </section>

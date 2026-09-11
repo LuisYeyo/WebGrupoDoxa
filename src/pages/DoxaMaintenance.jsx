@@ -8,19 +8,10 @@ function DoxaMaintenance() {
 
   return (
     <main className="company-page">
-
-      <section className="company-hero">
-
+      <section className="company-hero company-hero--maintenance">
         <div className="company-container company-hero-grid">
-
           <div>
-            <p className="company-eyebrow">
-              04 / DOXA
-            </p>
-
-            <h1>
-              Mantenimiento Industrial DOXA
-            </h1>
+            <h1>Mantenimiento Industrial DOXA</h1>
 
             <p className="company-hero-subtitle">
               {t(
@@ -36,15 +27,11 @@ function DoxaMaintenance() {
               "Company specialized in preventive and corrective maintenance, repair and servicing of industrial equipment and facilities."
             )}
           </p>
-
         </div>
-
       </section>
 
       <section className="company-content-section">
-
         <div className="company-container company-content-grid">
-
           <div>
             <p className="company-eyebrow">
               {t("ESPECIALIDAD", "SPECIALTY")}
@@ -59,20 +46,15 @@ function DoxaMaintenance() {
           </div>
 
           <div className="company-capability-list">
-
             <span>{t("Mantenimiento preventivo", "Preventive maintenance")}</span>
             <span>{t("Mantenimiento correctivo", "Corrective maintenance")}</span>
             <span>{t("Reparación", "Repair")}</span>
             <span>{t("Sandblast y pintura", "Sandblasting and painting")}</span>
-
           </div>
-
         </div>
-
       </section>
 
       <CompanyCTA t={t} />
-
     </main>
   );
 }
@@ -82,7 +64,6 @@ function CompanyCTA({ t }) {
     <section className="company-cta-section">
       <div className="company-container">
         <div className="company-cta">
-
           <div>
             <p className="company-eyebrow">
               {t("MANTENIMIENTO", "MAINTENANCE")}
@@ -100,7 +81,6 @@ function CompanyCTA({ t }) {
             {t("Solicitar cotización", "Request a quote")}
             <ArrowRight size={17} />
           </Link>
-
         </div>
       </div>
     </section>

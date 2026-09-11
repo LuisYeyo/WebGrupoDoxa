@@ -34,10 +34,31 @@ import {
 import PageReveal from "../components/ui/PageReveal"
 
 
+const contacts = [
+  {
+    name: "Ing. Ramiro Robles Del Angel",
+    phone: "833-252-45-14",
+    email: "ramiro.robles@grupoindustrialdoxa.com",
+  },
+
+  {
+    name: "Ing. Carlos Robles Del Angel",
+    phone: "833-365-56-81",
+    email: "carlos.robles@grupoindustrialdoxa.com",
+  },
+
+  {
+    name: "Ing. Nezahualcoyotl Piña Palmillas",
+    phone: "720-585-33-73",
+    whatsapp: "833-405-29-82",
+    email: "ing.netzahualcoyotl1973@gmail.com",
+  },
+]
+
+
 function Contact() {
   const navigate =
     useNavigate()
-
 
   const {
     language,
@@ -102,47 +123,33 @@ function Contact() {
     },
 
     {
-      value:
-        "Tubería industrial",
-
-      es:
-        "Tubería industrial",
-
-      en:
-        "Industrial piping",
+      value: "Tubería industrial",
+      es: "Tubería industrial",
+      en: "Industrial piping",
     },
 
     {
-      value:
-        "Perforación",
-
-      es:
-        "Perforación",
-
-      en:
-        "Drilling",
+      value: "Perforación",
+      es: "Perforación",
+      en: "Drilling",
     },
 
     {
-      value:
-        "Aislamiento industrial",
-
-      es:
-        "Aislamiento industrial",
-
-      en:
-        "Industrial insulation",
+      value: "Aislamiento industrial",
+      es: "Aislamiento industrial",
+      en: "Industrial insulation",
     },
 
     {
-      value:
-        "Renta de equipo",
+      value: "Sandblast y pintura",
+      es: "Sandblast y pintura",
+      en: "Sandblasting and painting",
+    },
 
-      es:
-        "Renta de equipo",
-
-      en:
-        "Equipment rental",
+    {
+      value: "Renta de equipo",
+      es: "Renta de equipo",
+      en: "Equipment rental",
     },
 
     {
@@ -182,6 +189,7 @@ function Contact() {
         return
       }
 
+
       setStatus(
         "sending"
       )
@@ -190,6 +198,7 @@ function Contact() {
 
 
       try {
+
         const response =
           await fetch(
             "/api/quote",
@@ -234,6 +243,7 @@ function Contact() {
         )
 
       } catch (error) {
+
         console.error(
           error
         )
@@ -304,7 +314,6 @@ function Contact() {
               lg:grid-cols-[1fr_0.8fr]
             "
           >
-
 
             <div>
 
@@ -402,7 +411,7 @@ function Contact() {
 
 
       {/* =====================================================
-          CONTACT INFORMATION
+          CONTACTOS
       ===================================================== */}
 
       <section className="py-10">
@@ -415,6 +424,48 @@ function Contact() {
           "
         >
 
+          <PageReveal
+            delay={0.04}
+            y={18}
+          >
+
+            <div className="mb-7">
+
+              <p
+                className="
+                  text-[10px]
+                  font-semibold
+                  uppercase
+                  tracking-[0.25em]
+                  text-blue-600
+                "
+              >
+                {t(
+                  "Contacto directo",
+                  "Direct contact"
+                )}
+              </p>
+
+              <h2
+                className="
+                  mt-3
+                  text-2xl
+                  font-bold
+                  tracking-tight
+                  sm:text-3xl
+                "
+              >
+                {t(
+                  "Nuestro equipo",
+                  "Our team"
+                )}
+              </h2>
+
+            </div>
+
+          </PageReveal>
+
+
           <div
             className="
               grid
@@ -423,88 +474,122 @@ function Contact() {
             "
           >
 
+            {contacts.map(
+              (
+                contact,
+                index
+              ) => (
 
-            {/* TELÉFONO */}
+                <PageReveal
+                  key={
+                    contact.email
+                  }
+                  delay={
+                    0.06 +
+                    index * 0.08
+                  }
+                  y={24}
+                  className="contact-reveal-card"
+                >
 
-            <PageReveal
-              delay={0.06}
-              y={24}
-              className="contact-reveal-card"
-            >
-
-              <ContactCard
-                icon={
-                  <Phone
-                    size={19}
+                  <PersonContactCard
+                    contact={
+                      contact
+                    }
+                    t={t}
                   />
-                }
-                label={t(
-                  "Teléfono",
-                  "Phone"
-                )}
-                value={
-                  contactInfo.phone
-                }
-              />
 
-            </PageReveal>
+                </PageReveal>
+
+              )
+            )}
+
+          </div>
 
 
-            {/* EMAIL */}
+          <PageReveal
+            delay={0.26}
+            y={20}
+          >
 
-            <PageReveal
-              delay={0.14}
-              y={24}
-              className="contact-reveal-card"
+            <div
+              className="
+                mt-4
+                rounded-[24px]
+                border
+                border-slate-200
+                bg-white
+                p-6
+                shadow-[0_0_25px_rgba(15,23,42,0.025)]
+              "
             >
 
-              <ContactCard
-                icon={
-                  <Mail
-                    size={19}
-                  />
-                }
-                label={t(
-                  "Correo",
-                  "Email"
-                )}
-                value={
-                  contactInfo.email
-                }
-                small
-              />
+              <div
+                className="
+                  flex
+                  items-center
+                  gap-4
+                "
+              >
 
-            </PageReveal>
-
-
-            {/* LOCATION */}
-
-            <PageReveal
-              delay={0.22}
-              y={24}
-              className="contact-reveal-card"
-            >
-
-              <ContactCard
-                icon={
+                <div
+                  className="
+                    flex
+                    h-11
+                    w-11
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-xl
+                    bg-blue-50
+                    text-blue-600
+                  "
+                >
                   <MapPin
                     size={19}
                   />
-                }
-                label={t(
-                  "Ubicación",
-                  "Location"
-                )}
-                value={
-                  contactInfo.location[
-                    language
-                  ]
-                }
-              />
+                </div>
 
-            </PageReveal>
 
-          </div>
+                <div>
+
+                  <p
+                    className="
+                      text-[10px]
+                      font-semibold
+                      uppercase
+                      tracking-[0.22em]
+                      text-slate-400
+                    "
+                  >
+                    {t(
+                      "Ubicación",
+                      "Location"
+                    )}
+                  </p>
+
+                  <p
+                    className="
+                      mt-1
+                      text-base
+                      font-semibold
+                      text-[#0b1830]
+                    "
+                  >
+                    {
+                      contactInfo.location[
+                        language
+                      ]
+                    }
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </PageReveal>
 
         </div>
 
@@ -715,6 +800,7 @@ function Contact() {
                         -top-[9999px]
                       "
                     >
+
                       <label>
 
                         Website
@@ -733,6 +819,7 @@ function Contact() {
                         />
 
                       </label>
+
                     </div>
 
 
@@ -1200,10 +1287,12 @@ function Contact() {
                             damping: 14,
                           }}
                         >
+
                           <Check
                             size={43}
                             strokeWidth={3}
                           />
+
                         </motion.div>
 
                       </motion.div>
@@ -1392,6 +1481,7 @@ function Contact() {
                           hover:bg-blue-500
                         "
                       >
+
                         <Home
                           size={17}
                         />
@@ -1400,6 +1490,7 @@ function Contact() {
                           "Volver al inicio",
                           "Back to home"
                         )}
+
                       </button>
 
 
@@ -1428,6 +1519,7 @@ function Contact() {
                           hover:text-blue-600
                         "
                       >
+
                         <RotateCcw
                           size={16}
                         />
@@ -1436,6 +1528,7 @@ function Contact() {
                           "Enviar otra solicitud",
                           "Send another request"
                         )}
+
                       </button>
 
                     </motion.div>
@@ -1459,15 +1552,13 @@ function Contact() {
 }
 
 
-// =========================================================
-// CONTACT INFO CARD
-// =========================================================
+/* =========================================================
+   PERSON CONTACT CARD
+========================================================= */
 
-function ContactCard({
-  icon,
-  label,
-  value,
-  small = false,
+function PersonContactCard({
+  contact,
+  t,
 }) {
   return (
     <div
@@ -1485,12 +1576,152 @@ function ContactCard({
       <div
         className="
           flex
-          h-11
-          w-11
-          items-center
-          justify-center
-          rounded-xl
-          bg-blue-50
+          items-start
+          justify-between
+          gap-4
+        "
+      >
+
+        <div
+          className="
+            flex
+            h-11
+            w-11
+            shrink-0
+            items-center
+            justify-center
+            rounded-xl
+            bg-blue-50
+            text-blue-600
+          "
+        >
+          <Building2
+            size={19}
+          />
+        </div>
+
+      </div>
+
+
+      <p
+        className="
+          mt-6
+          text-[10px]
+          font-semibold
+          uppercase
+          tracking-[0.22em]
+          text-blue-600
+        "
+      >
+        {t(
+          "Contacto",
+          "Contact"
+        )}
+      </p>
+
+
+      <h3
+        className="
+          mt-2
+          text-lg
+          font-bold
+          leading-snug
+          tracking-tight
+          text-[#0b1830]
+        "
+      >
+        {
+          contact.name
+        }
+      </h3>
+
+
+      <div
+        className="
+          mt-6
+          space-y-4
+        "
+      >
+
+        <ContactDetail
+          icon={
+            <Phone
+              size={16}
+            />
+          }
+          label={t(
+            "Teléfono",
+            "Phone"
+          )}
+          value={
+            contact.phone
+          }
+        />
+
+
+        {contact.whatsapp && (
+
+          <ContactDetail
+            icon={
+              <Phone
+                size={16}
+              />
+            }
+            label="WhatsApp"
+            value={
+              contact.whatsapp
+            }
+          />
+
+        )}
+
+
+        <ContactDetail
+          icon={
+            <Mail
+              size={16}
+            />
+          }
+          label={t(
+            "Correo",
+            "Email"
+          )}
+          value={
+            contact.email
+          }
+          small
+        />
+
+      </div>
+
+    </div>
+  )
+}
+
+
+/* =========================================================
+   CONTACT DETAIL
+========================================================= */
+
+function ContactDetail({
+  icon,
+  label,
+  value,
+  small = false,
+}) {
+  return (
+    <div
+      className="
+        flex
+        items-start
+        gap-3
+      "
+    >
+
+      <div
+        className="
+          mt-0.5
+          shrink-0
           text-blue-600
         "
       >
@@ -1498,44 +1729,47 @@ function ContactCard({
       </div>
 
 
-      <p
-        className="
-          mt-7
-          text-[10px]
-          font-semibold
-          uppercase
-          tracking-[0.22em]
-          text-slate-400
-        "
-      >
-        {label}
-      </p>
+      <div className="min-w-0">
+
+        <p
+          className="
+            text-[9px]
+            font-semibold
+            uppercase
+            tracking-[0.18em]
+            text-slate-400
+          "
+        >
+          {label}
+        </p>
 
 
-      <p
-        className={`
-          mt-2
-          font-semibold
-          text-[#0b1830]
+        <p
+          className={`
+            mt-1
+            font-semibold
+            text-[#0b1830]
 
-          ${
-            small
-              ? "break-all text-sm sm:text-base"
-              : "text-lg"
-          }
-        `}
-      >
-        {value}
-      </p>
+            ${
+              small
+                ? "break-all text-xs sm:text-sm"
+                : "text-sm"
+            }
+          `}
+        >
+          {value}
+        </p>
+
+      </div>
 
     </div>
   )
 }
 
 
-// =========================================================
-// INPUT
-// =========================================================
+/* =========================================================
+   INPUT
+========================================================= */
 
 function InputField({
   label,

@@ -8,19 +8,10 @@ function Remsa() {
 
   return (
     <main className="company-page">
-
-      <section className="company-hero">
-
+      <section className="company-hero company-hero--remsa">
         <div className="company-container company-hero-grid">
-
           <div>
-            <p className="company-eyebrow">
-              02 / REMSA
-            </p>
-
-            <h1>
-              Grupo Industrial REMSA
-            </h1>
+            <h1>Grupo Industrial REMSA</h1>
 
             <p className="company-hero-subtitle">
               {t(
@@ -36,15 +27,11 @@ function Remsa() {
               "Company focused on metal fabrication, piping, structures and industrial work carried out through Grupo Industrial DOXA's workshops."
             )}
           </p>
-
         </div>
-
       </section>
 
       <section className="company-content-section">
-
         <div className="company-container company-content-grid">
-
           <div>
             <p className="company-eyebrow">
               {t("ESPECIALIDAD", "SPECIALTY")}
@@ -59,21 +46,16 @@ function Remsa() {
           </div>
 
           <div className="company-capability-list">
-
             <span>{t("Acero inoxidable", "Stainless steel")}</span>
             <span>{t("Acero al carbón", "Carbon steel")}</span>
             <span>{t("Tubería", "Piping")}</span>
             <span>{t("Estructuras metálicas", "Steel structures")}</span>
             <span>{t("Montaje", "Installation")}</span>
-
           </div>
-
         </div>
-
       </section>
 
       <CompanyCTA t={t} />
-
     </main>
   );
 }
@@ -83,11 +65,8 @@ function CompanyCTA({ t }) {
     <section className="company-cta-section">
       <div className="company-container">
         <div className="company-cta">
-
           <div>
-            <p className="company-eyebrow">
-              {t("REMSA", "REMSA")}
-            </p>
+            <p className="company-eyebrow">{t("REMSA", "REMSA")}</p>
 
             <h2>
               {t(
@@ -101,7 +80,6 @@ function CompanyCTA({ t }) {
             {t("Solicitar cotización", "Request a quote")}
             <ArrowRight size={17} />
           </Link>
-
         </div>
       </div>
     </section>
