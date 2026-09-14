@@ -22,14 +22,8 @@ function Footer() {
     new Date().getFullYear()
 
 
-  /*
-    IMPORTANTE:
-    Después reemplaza esta URL
-    por la de tu LinkedIn real.
-  */
-
   const linkedinUrl =
-    "www.linkedin.com/in/luis-eduardo-flores-peña"
+    "https://www.linkedin.com/in/luis-eduardo-flores-peña"
 
 
   return (
