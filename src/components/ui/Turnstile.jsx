@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react"
 
 const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY
 
-export default function Turnstile({ onVerify, resetKey }) {
+export default function Turnstile({ onVerify, resetKey, action = "quote", className = "mt-6" }) {
   const container = useRef(null)
   const widgetId = useRef(null)
 
@@ -13,7 +13,7 @@ export default function Turnstile({ onVerify, resetKey }) {
       if (!active || !container.current || !window.turnstile || widgetId.current !== null) return
       widgetId.current = window.turnstile.render(container.current, {
         sitekey: siteKey,
-        action: "quote",
+        action,
         language: "auto",
         size: "flexible",
         callback: onVerify,
@@ -36,12 +36,12 @@ export default function Turnstile({ onVerify, resetKey }) {
       if (widgetId.current !== null && window.turnstile) window.turnstile.remove(widgetId.current)
       widgetId.current = null
     }
-  }, [onVerify])
+  }, [action, onVerify])
 
   useEffect(() => {
     if (resetKey && widgetId.current !== null && window.turnstile) window.turnstile.reset(widgetId.current)
   }, [resetKey])
 
   if (!siteKey) return <p className="mt-6 text-sm text-red-700">La verificación del formulario no está configurada.</p>
-  return <div className="mt-6" ref={container} />
+  return <div className={className} ref={container} />
 }

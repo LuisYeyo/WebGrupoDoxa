@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { Building2, ClipboardList, LogOut, Mail, RefreshCw, ShieldCheck } from "lucide-react"
+import Turnstile from "../components/ui/Turnstile"
 import { isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
 
@@ -33,20 +34,31 @@ function Login({ onAuthenticated }) {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState("")
+  const [captchaReset, setCaptchaReset] = useState(0)
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError("")
+
+    if (!captchaToken) {
+      setError("Completa la verificación de seguridad.")
+      return
+    }
+
     setSubmitting(true)
 
     const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
+      options: { captchaToken },
     })
 
     setSubmitting(false)
     if (signInError) {
       setError("El correo o la contraseña no son correctos.")
+      setCaptchaToken("")
+      setCaptchaReset((current) => current + 1)
       return
     }
     onAuthenticated(data.session)
@@ -73,6 +85,12 @@ function Login({ onAuthenticated }) {
             minLength={8} required />
 
           {error && <div className="internal-alert" role="alert">{error}</div>}
+          <Turnstile
+            action="login"
+            className="internal-captcha"
+            onVerify={setCaptchaToken}
+            resetKey={captchaReset}
+          />
           <button type="submit" disabled={submitting}>
             {submitting ? "Ingresando…" : "Ingresar"}
           </button>
