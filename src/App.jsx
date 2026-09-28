@@ -27,11 +27,14 @@ const Doxa = lazy(() => import("./pages/Doxa"))
 const Remsa = lazy(() => import("./pages/Remsa"))
 const Secmimar = lazy(() => import("./pages/Secmimar"))
 const DoxaMaintenance = lazy(() => import("./pages/DoxaMaintenance"))
+const Internal = lazy(() => import("./pages/Internal"))
 
 function App() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-white" aria-label="Cargando página" />}>
       <Routes>
+      <Route path="/interno" element={<Internal />} />
+
       <Route element={<MainLayout />}>
         {/* INICIO */}
         <Route
