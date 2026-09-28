@@ -36,10 +36,12 @@ function createProjectCode() {
   return `PR-${date}-${random}`
 }
 
-function Login({ onAuthenticated }) {
+function Login({ onAuthenticated, authLinkInvalid = false }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
+  const [error, setError] = useState(authLinkInvalid
+    ? "Este enlace de invitación venció, ya fue utilizado o no es válido. Solicita un enlace nuevo."
+    : "")
   const [submitting, setSubmitting] = useState(false)
   const [captchaToken, setCaptchaToken] = useState("")
   const [captchaReset, setCaptchaReset] = useState(0)
@@ -152,7 +154,10 @@ function Login({ onAuthenticated }) {
   )
 }
 
-function PasswordSetup({ onComplete }) {
+function PasswordSetup({ session, onComplete }) {
+  const invitedEmail = session.user.email || ""
+  const [email, setEmail] = useState(invitedEmail)
+  const [fullName, setFullName] = useState(session.user.user_metadata?.full_name || "")
   const [password, setPassword] = useState("")
   const [confirmation, setConfirmation] = useState("")
   const [error, setError] = useState("")
@@ -171,6 +176,14 @@ function PasswordSetup({ onComplete }) {
     event.preventDefault()
     setError("")
 
+    if (email.trim().toLowerCase() !== invitedEmail.toLowerCase()) {
+      setError(`El correo debe coincidir con la invitación enviada a ${invitedEmail}.`)
+      return
+    }
+    if (fullName.trim().length < 2) {
+      setError("Escribe tu nombre completo.")
+      return
+    }
     if (!passwordIsValid) {
       setError("La contraseña todavía no cumple todos los requisitos.")
       return
@@ -181,10 +194,13 @@ function PasswordSetup({ onComplete }) {
     }
 
     setSubmitting(true)
-    const { error: updateError } = await supabase.auth.updateUser({ password })
-    setSubmitting(false)
+    const { error: updateError } = await supabase.auth.updateUser({
+      password,
+      data: { full_name: fullName.trim() },
+    })
 
     if (updateError) {
+      setSubmitting(false)
       const message = updateError.message?.toLowerCase() || ""
       setError(
         message.includes("expired")
@@ -193,6 +209,21 @@ function PasswordSetup({ onComplete }) {
             ? `Supabase rechazó la contraseña: ${updateError.message}`
             : `No fue posible guardar la contraseña: ${updateError.message}`
       )
+      return
+    }
+
+    const profileResponse = await fetch("/api/account/profile", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ fullName: fullName.trim() }),
+    })
+    setSubmitting(false)
+
+    if (!profileResponse.ok) {
+      setError("La contraseña se guardó, pero no pudimos actualizar el nombre. Entra con tu nueva contraseña y avisa al administrador.")
       return
     }
 
@@ -211,6 +242,15 @@ function PasswordSetup({ onComplete }) {
         </p>
 
         <form onSubmit={handleSubmit} className="internal-form">
+          <label htmlFor="activation-email">Correo electrónico invitado</label>
+          <input id="activation-email" type="email" autoComplete="email"
+            value={email} onChange={(event) => setEmail(event.target.value)} required />
+
+          <label htmlFor="activation-name">Nombre completo</label>
+          <input id="activation-name" type="text" autoComplete="name"
+            value={fullName} onChange={(event) => setFullName(event.target.value)}
+            minLength={2} maxLength={150} required />
+
           <label htmlFor="new-password">Nueva contraseña</label>
           <input id="new-password" type="password" autoComplete="new-password"
             value={password} onChange={(event) => setPassword(event.target.value)}
@@ -759,8 +799,8 @@ function Internal() {
     return <main className="internal-auth-shell"><div className="internal-alert">El acceso interno todavía no está configurado.</div></main>
   }
   if (loading) return <main className="internal-auth-shell"><div className="internal-loader" /></main>
-  if (!session) return <Login onAuthenticated={setSession} />
-  if (settingPassword) return <PasswordSetup onComplete={() => setSettingPassword(false)} />
+  if (!session) return <Login onAuthenticated={setSession} authLinkInvalid={hasAuthSetupParams} />
+  if (settingPassword) return <PasswordSetup session={session} onComplete={() => setSettingPassword(false)} />
   return <Dashboard session={session} />
 }
 
