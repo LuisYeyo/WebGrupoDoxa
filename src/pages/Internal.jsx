@@ -7,6 +7,7 @@ import "./Internal.css"
 const ROLE_LABELS = {
   admin: "Administrador",
   manager: "Gerente",
+  supervisor: "Supervisor",
   staff: "Personal",
   viewer: "Consulta",
 }
@@ -42,10 +43,12 @@ function Login({ onAuthenticated }) {
   const [submitting, setSubmitting] = useState(false)
   const [captchaToken, setCaptchaToken] = useState("")
   const [captchaReset, setCaptchaReset] = useState(0)
+  const [notice, setNotice] = useState("")
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError("")
+    setNotice("")
 
     if (!captchaToken) {
       setError("Completa la verificación de seguridad.")
@@ -70,6 +73,41 @@ function Login({ onAuthenticated }) {
     onAuthenticated(data.session)
   }
 
+  const requestPasswordLink = async () => {
+    setError("")
+    setNotice("")
+
+    if (!email.trim()) {
+      setError("Escribe primero tu correo electrónico.")
+      return
+    }
+    if (!captchaToken) {
+      setError("Completa la verificación de seguridad.")
+      return
+    }
+
+    setSubmitting(true)
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+      email.trim(),
+      {
+        redirectTo: "https://www.grupoindustriadoxa.com/interno",
+        captchaToken,
+      }
+    )
+    setSubmitting(false)
+    setCaptchaToken("")
+    setCaptchaReset((current) => current + 1)
+
+    if (resetError) {
+      setError(resetError.message?.toLowerCase().includes("rate")
+        ? "Se alcanzó el límite temporal de correos. Espera un poco e inténtalo nuevamente."
+        : `No fue posible enviar el enlace: ${resetError.message}`)
+      return
+    }
+
+    setNotice("Si la cuenta existe, recibirás un enlace nuevo para crear o cambiar tu contraseña.")
+  }
+
   return (
     <main className="internal-auth-shell">
       <section className="internal-login-card">
@@ -91,6 +129,7 @@ function Login({ onAuthenticated }) {
             minLength={8} required />
 
           {error && <div className="internal-alert" role="alert">{error}</div>}
+          {notice && <div className="internal-notice" role="status">{notice}</div>}
           <Turnstile
             action="login"
             className="internal-captcha"
@@ -99,6 +138,9 @@ function Login({ onAuthenticated }) {
           />
           <button type="submit" disabled={submitting}>
             {submitting ? "Ingresando…" : "Ingresar"}
+          </button>
+          <button type="button" className="internal-secondary-action" disabled={submitting} onClick={requestPasswordLink}>
+            Crear o restablecer contraseña
           </button>
         </form>
 
@@ -134,7 +176,14 @@ function PasswordSetup({ onComplete }) {
     setSubmitting(false)
 
     if (updateError) {
-      setError("No fue posible guardar la contraseña. Inténtalo nuevamente.")
+      const message = updateError.message?.toLowerCase() || ""
+      setError(
+        message.includes("expired")
+          ? "La invitación venció. Pide al administrador que envíe una nueva."
+          : message.includes("weak") || message.includes("password")
+            ? `Supabase rechazó la contraseña: ${updateError.message}`
+            : `No fue posible guardar la contraseña: ${updateError.message}`
+      )
       return
     }
 
@@ -284,7 +333,7 @@ function InternalUsers({ session }) {
           <label htmlFor="employee-role">Rol</label>
           <select id="employee-role" value={showInvite ? invite.role : editing.role}
             onChange={(event) => showInvite ? setInvite({ ...invite, role: event.target.value }) : setEditing({ ...editing, role: event.target.value })}>
-            <option value="admin">Administrador</option><option value="manager">Gerente</option><option value="staff">Personal</option><option value="viewer">Consulta</option>
+            <option value="admin">Administrador</option><option value="manager">Gerente</option><option value="supervisor">Supervisor</option><option value="staff">Personal</option><option value="viewer">Consulta</option>
           </select>
           {!showInvite && <label className="internal-toggle"><input type="checkbox" checked={editing.active} onChange={(event) => setEditing({ ...editing, active: event.target.checked })} /> Cuenta activa</label>}
           <button type="submit" disabled={saving}>{saving ? "Guardando…" : showInvite ? "Enviar invitación" : "Guardar cambios"}</button>
@@ -345,7 +394,7 @@ function Dashboard({ session }) {
   }, [session.user.id])
 
   const updateStatus = async (status) => {
-    if (!selectedRequest || !["admin", "manager"].includes(profile?.role)) return
+    if (!selectedRequest || !["admin", "manager", "supervisor"].includes(profile?.role)) return
 
     setSavingStatus(true)
     setError("")
@@ -369,7 +418,7 @@ function Dashboard({ session }) {
 
   const createClient = async (event) => {
     event.preventDefault()
-    if (!["admin", "manager"].includes(profile?.role)) return
+    if (!["admin", "manager", "supervisor"].includes(profile?.role)) return
 
     setSavingClient(true)
     setError("")
@@ -395,7 +444,7 @@ function Dashboard({ session }) {
 
   const createProject = async (event) => {
     event.preventDefault()
-    if (!["admin", "manager", "staff"].includes(profile?.role)) return
+    if (!["admin", "manager", "supervisor", "staff"].includes(profile?.role)) return
 
     setSavingProject(true)
     setError("")
@@ -468,11 +517,11 @@ function Dashboard({ session }) {
             <button type="button" className="internal-refresh" onClick={loadData} disabled={loading}>
               <RefreshCw size={17} className={loading ? "spin" : ""} /> Actualizar
             </button>
-          ) : activeModule === "clients" && ["admin", "manager"].includes(profile?.role) ? (
+          ) : activeModule === "clients" && ["admin", "manager", "supervisor"].includes(profile?.role) ? (
             <button type="button" className="internal-primary-action" onClick={() => setShowClientForm(true)}>
               <Plus size={17} /> Nuevo cliente
             </button>
-          ) : activeModule === "projects" && ["admin", "manager", "staff"].includes(profile?.role) ? (
+          ) : activeModule === "projects" && ["admin", "manager", "supervisor", "staff"].includes(profile?.role) ? (
             <button type="button" className="internal-primary-action" onClick={() => setShowProjectForm(true)}>
               <Plus size={17} /> Nuevo trabajo
             </button>
@@ -637,7 +686,7 @@ function Dashboard({ session }) {
             <label className="internal-status-field" htmlFor="request-status">Estado</label>
             <select id="request-status" value={selectedRequest.status}
               onChange={(event) => updateStatus(event.target.value)}
-              disabled={savingStatus || !["admin", "manager"].includes(profile?.role)}>
+              disabled={savingStatus || !["admin", "manager", "supervisor"].includes(profile?.role)}>
               {Object.entries(STATUS_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}

@@ -1,6 +1,6 @@
 import { getSupabaseServerClient } from "../_supabase.js"
 
-const ALLOWED_ROLES = ["admin", "manager", "staff", "viewer"]
+const ALLOWED_ROLES = ["admin", "manager", "supervisor", "staff", "viewer"]
 
 async function requireAdmin(req) {
   const token = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "")
