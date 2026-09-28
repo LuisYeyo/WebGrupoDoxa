@@ -1,6 +1,7 @@
 import { Resend } from "resend"
 import process from "node:process"
 import { enforceRateLimit, verifyCaptcha } from "./_security.js"
+import { getSupabaseServerClient } from "./_supabase.js"
 
 const resend =
   new Resend(
@@ -164,6 +165,38 @@ export default async function handler(
 
     const requestId =
       createRequestId()
+
+    const supabase =
+      getSupabaseServerClient()
+
+    const { error: databaseError } =
+      await supabase
+        .from("quote_requests")
+        .insert({
+          request_code: requestId,
+          requester_name: String(name).trim(),
+          company_name: String(company || "").trim() || null,
+          email: String(email).trim().toLowerCase(),
+          phone: String(phone || "").trim() || null,
+          service: String(service).trim(),
+          message: String(message).trim(),
+          source: "website",
+        })
+
+    if (databaseError) {
+      console.error(
+        "Quote database error:",
+        databaseError
+      )
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            "Unable to save request",
+        })
+    }
 
     const safeName =
       escapeHtml(name)
