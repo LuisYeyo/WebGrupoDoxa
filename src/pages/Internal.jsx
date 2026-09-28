@@ -167,6 +167,127 @@ function PasswordSetup({ onComplete }) {
   )
 }
 
+function InternalUsers({ session }) {
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [editing, setEditing] = useState(null)
+  const [showInvite, setShowInvite] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [invite, setInvite] = useState({ fullName: "", email: "", role: "staff" })
+
+  const request = useCallback(async (options = {}) => {
+    const response = await fetch("/api/admin/users", {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+        ...options.headers,
+      },
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.message || "Request failed")
+    return data
+  }, [session.access_token])
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true)
+    setError("")
+    try {
+      const data = await request()
+      setUsers(data.users)
+    } catch {
+      setError("No fue posible cargar el personal.")
+    }
+    setLoading(false)
+  }, [request])
+
+  useEffect(() => {
+    const timeout = window.setTimeout(loadUsers, 0)
+    return () => window.clearTimeout(timeout)
+  }, [loadUsers])
+
+  const sendInvite = async (event) => {
+    event.preventDefault()
+    setSaving(true)
+    setError("")
+    try {
+      await request({ method: "POST", body: JSON.stringify(invite) })
+      setInvite({ fullName: "", email: "", role: "staff" })
+      setShowInvite(false)
+      await loadUsers()
+    } catch (inviteError) {
+      setError(inviteError.message.includes("rate")
+        ? "Supabase alcanzó el límite temporal de correos. Inténtalo más tarde."
+        : "No fue posible enviar la invitación. Revisa que el correo no exista.")
+    }
+    setSaving(false)
+  }
+
+  const saveUser = async (event) => {
+    event.preventDefault()
+    setSaving(true)
+    setError("")
+    try {
+      await request({
+        method: "PATCH",
+        body: JSON.stringify({ id: editing.id, fullName: editing.full_name, role: editing.role, active: editing.active }),
+      })
+      setEditing(null)
+      await loadUsers()
+    } catch (updateError) {
+      setError(updateError.message.includes("own administrator")
+        ? "No puedes quitarte a ti mismo el acceso de administrador."
+        : "No fue posible actualizar al empleado.")
+    }
+    setSaving(false)
+  }
+
+  return <>
+    <div className="internal-users-toolbar">
+      <span>{users.length} cuentas registradas</span>
+      <button type="button" className="internal-primary-action" onClick={() => setShowInvite(true)}><Plus size={17} /> Invitar empleado</button>
+    </div>
+    {error && <div className="internal-alert" role="alert">{error}</div>}
+    <div className="internal-table-card">
+      {loading ? <div className="internal-empty">Cargando personal…</div> : (
+        <div className="internal-table-wrap"><table>
+          <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
+          <tbody>{users.map((user) => <tr key={user.id}>
+            <td><strong>{user.full_name || "Sin nombre"}</strong>{user.current && <span>Tu cuenta</span>}</td>
+            <td>{user.email}</td>
+            <td>{ROLE_LABELS[user.role] || "Sin asignar"}</td>
+            <td><span className={`internal-status ${user.active ? "status-active" : "status-cancelled"}`}>{user.active ? "Activo" : "Baja"}</span></td>
+            <td><button type="button" className="internal-link-button" onClick={() => setEditing({ ...user })}>Modificar</button></td>
+          </tr>)}</tbody>
+        </table></div>
+      )}
+    </div>
+
+    {(showInvite || editing) && <div className="internal-drawer-backdrop" onClick={() => { setShowInvite(false); setEditing(null) }}>
+      <aside className="internal-drawer" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="internal-drawer-close" onClick={() => { setShowInvite(false); setEditing(null) }}><X size={20} /></button>
+        <p className="internal-eyebrow">PERSONAL</p>
+        <h2>{showInvite ? "Invitar empleado" : "Modificar empleado"}</h2>
+        <p className="internal-drawer-company">{showInvite ? "Recibirá un enlace para crear su contraseña." : editing.email}</p>
+        <form className="internal-form" onSubmit={showInvite ? sendInvite : saveUser}>
+          <label htmlFor="employee-name">Nombre completo</label>
+          <input id="employee-name" value={showInvite ? invite.fullName : editing.full_name}
+            onChange={(event) => showInvite ? setInvite({ ...invite, fullName: event.target.value }) : setEditing({ ...editing, full_name: event.target.value })} required />
+          {showInvite && <><label htmlFor="employee-email">Correo</label><input id="employee-email" type="email" value={invite.email} onChange={(event) => setInvite({ ...invite, email: event.target.value })} required /></>}
+          <label htmlFor="employee-role">Rol</label>
+          <select id="employee-role" value={showInvite ? invite.role : editing.role}
+            onChange={(event) => showInvite ? setInvite({ ...invite, role: event.target.value }) : setEditing({ ...editing, role: event.target.value })}>
+            <option value="admin">Administrador</option><option value="manager">Gerente</option><option value="staff">Personal</option><option value="viewer">Consulta</option>
+          </select>
+          {!showInvite && <label className="internal-toggle"><input type="checkbox" checked={editing.active} onChange={(event) => setEditing({ ...editing, active: event.target.checked })} /> Cuenta activa</label>}
+          <button type="submit" disabled={saving}>{saving ? "Guardando…" : showInvite ? "Enviar invitación" : "Guardar cambios"}</button>
+        </form>
+      </aside>
+    </div>}
+  </>
+}
+
 function Dashboard({ session }) {
   const [profile, setProfile] = useState(null)
   const [requests, setRequests] = useState([])
@@ -284,28 +405,29 @@ function Dashboard({ session }) {
       <nav className="internal-module-nav" aria-label="Módulos internos">
         <button type="button" className={activeModule === "requests" ? "active" : ""} onClick={() => setActiveModule("requests")}>Solicitudes</button>
         <button type="button" className={activeModule === "clients" ? "active" : ""} onClick={() => setActiveModule("clients")}>Clientes</button>
+        {profile?.role === "admin" && <button type="button" className={activeModule === "users" ? "active" : ""} onClick={() => setActiveModule("users")}>Personal</button>}
         <button type="button" disabled>Proyectos <span>Próximamente</span></button>
       </nav>
 
       <section className="internal-content">
         <div className="internal-heading-row">
           <div>
-            <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : "DIRECTORIO"}</p>
-            <h1>{activeModule === "requests" ? "Solicitudes de cotización" : "Clientes"}</h1>
-            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : "Empresas y personas para las que se realizan trabajos."}</p>
+            <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : "ADMINISTRACIÓN"}</p>
+            <h1>{activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : "Personal"}</h1>
+            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : "Invitaciones, roles y acceso al sistema interno."}</p>
           </div>
           {activeModule === "requests" ? (
             <button type="button" className="internal-refresh" onClick={loadData} disabled={loading}>
               <RefreshCw size={17} className={loading ? "spin" : ""} /> Actualizar
             </button>
-          ) : ["admin", "manager"].includes(profile?.role) ? (
+          ) : activeModule === "clients" && ["admin", "manager"].includes(profile?.role) ? (
             <button type="button" className="internal-primary-action" onClick={() => setShowClientForm(true)}>
               <Plus size={17} /> Nuevo cliente
             </button>
           ) : null}
         </div>
 
-        <div className="internal-summary-grid">
+        {activeModule !== "users" && <div className="internal-summary-grid">
           {activeModule === "requests" ? <>
             <article><ClipboardList size={22} /><div><strong>{requests.length}</strong><span>Solicitudes visibles</span></div></article>
             <article><Mail size={22} /><div><strong>{requests.filter((item) => item.status === "lead").length}</strong><span>Nuevas</span></div></article>
@@ -313,11 +435,11 @@ function Dashboard({ session }) {
             <article><Users size={22} /><div><strong>{clients.length}</strong><span>Clientes registrados</span></div></article>
             <article><Building2 size={22} /><div><strong>{clients.filter((item) => item.status === "active").length}</strong><span>Activos</span></div></article>
           </>}
-        </div>
+        </div>}
 
         {error && <div className="internal-alert" role="alert">{error}</div>}
 
-        <div className="internal-table-card">
+        {activeModule === "users" ? <InternalUsers session={session} /> : <div className="internal-table-card">
           {loading ? (
             <div className="internal-empty">Cargando información…</div>
           ) : activeModule === "requests" ? (requests.length === 0 ? (
@@ -357,7 +479,7 @@ function Dashboard({ session }) {
               </table>
             </div>
           )}
-        </div>
+        </div>}
       </section>
 
       {showClientForm && (
