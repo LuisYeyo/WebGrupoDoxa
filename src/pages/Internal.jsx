@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Building2, ClipboardList, LogOut, Mail, Plus, RefreshCw, ShieldCheck, Users, X } from "lucide-react"
+import { Building2, Check, ClipboardList, LogOut, Mail, Plus, RefreshCw, ShieldCheck, Users, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -157,13 +157,22 @@ function PasswordSetup({ onComplete }) {
   const [confirmation, setConfirmation] = useState("")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const passwordRequirements = [
+    { label: "Mínimo 8 caracteres", met: password.length >= 8 },
+    { label: "Una letra mayúscula", met: /[A-ZÁÉÍÓÚÑ]/.test(password) },
+    { label: "Una letra minúscula", met: /[a-záéíóúñ]/.test(password) },
+    { label: "Un número", met: /\d/.test(password) },
+    { label: "Un símbolo, por ejemplo: ! @ # $ %", met: /[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s]/.test(password) },
+  ]
+  const passwordIsValid = passwordRequirements.every((requirement) => requirement.met)
+  const passwordsMatch = confirmation.length > 0 && password === confirmation
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError("")
 
-    if (password.length < 8) {
-      setError("La contraseña debe tener al menos 8 caracteres.")
+    if (!passwordIsValid) {
+      setError("La contraseña todavía no cumple todos los requisitos.")
       return
     }
     if (password !== confirmation) {
@@ -207,13 +216,35 @@ function PasswordSetup({ onComplete }) {
             value={password} onChange={(event) => setPassword(event.target.value)}
             minLength={8} required />
 
+          <div className="password-requirements" aria-live="polite">
+            <p>La contraseña debe incluir:</p>
+            <ul>
+              {passwordRequirements.map((requirement) => (
+                <li className={requirement.met ? "is-met" : ""} key={requirement.label}>
+                  <span className="password-check" aria-hidden="true">
+                    {requirement.met && <Check size={14} strokeWidth={3} />}
+                  </span>
+                  {requirement.label}
+                </li>
+              ))}
+            </ul>
+          </div>
+
           <label htmlFor="confirm-password">Confirmar contraseña</label>
           <input id="confirm-password" type="password" autoComplete="new-password"
             value={confirmation} onChange={(event) => setConfirmation(event.target.value)}
             minLength={8} required />
+          {confirmation && (
+            <p className={`password-match ${passwordsMatch ? "is-met" : ""}`} aria-live="polite">
+              <span className="password-check" aria-hidden="true">
+                {passwordsMatch && <Check size={14} strokeWidth={3} />}
+              </span>
+              {passwordsMatch ? "Las contraseñas coinciden" : "Las contraseñas todavía no coinciden"}
+            </p>
+          )}
 
           {error && <div className="internal-alert" role="alert">{error}</div>}
-          <button type="submit" disabled={submitting}>
+          <button type="submit" disabled={submitting || !passwordIsValid || !passwordsMatch}>
             {submitting ? "Guardando…" : "Guardar contraseña"}
           </button>
         </form>
