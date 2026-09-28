@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Building2, ClipboardList, LogOut, Mail, RefreshCw, ShieldCheck, X } from "lucide-react"
+import { Building2, ClipboardList, LogOut, Mail, Plus, RefreshCw, ShieldCheck, Users, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -174,24 +174,35 @@ function Dashboard({ session }) {
   const [error, setError] = useState("")
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [savingStatus, setSavingStatus] = useState(false)
+  const [clients, setClients] = useState([])
+  const [activeModule, setActiveModule] = useState("requests")
+  const [showClientForm, setShowClientForm] = useState(false)
+  const [savingClient, setSavingClient] = useState(false)
+  const [clientForm, setClientForm] = useState({
+    legal_name: "", trade_name: "", tax_id: "", email: "", phone: "", notes: "",
+  })
 
   const loadData = useCallback(async () => {
     setLoading(true)
     setError("")
 
-    const [profileResult, requestResult] = await Promise.all([
+    const [profileResult, requestResult, clientResult] = await Promise.all([
       supabase.from("profiles").select("full_name, role, active")
         .eq("id", session.user.id).single(),
       supabase.from("quote_requests")
         .select("id, request_code, requester_name, company_name, email, phone, service, message, status, received_at")
         .order("received_at", { ascending: false }).limit(100),
+      supabase.from("clients")
+        .select("id, legal_name, trade_name, tax_id, email, phone, status, created_at")
+        .order("legal_name"),
     ])
 
-    if (profileResult.error || requestResult.error) {
+    if (profileResult.error || requestResult.error || clientResult.error) {
       setError("No se pudo cargar la información. Verifica que tu usuario esté activo.")
     } else {
       setProfile(profileResult.data)
       setRequests(requestResult.data ?? [])
+      setClients(clientResult.data ?? [])
     }
     setLoading(false)
   }, [session.user.id])
@@ -219,6 +230,32 @@ function Dashboard({ session }) {
     setSavingStatus(false)
   }
 
+  const createClient = async (event) => {
+    event.preventDefault()
+    if (!["admin", "manager"].includes(profile?.role)) return
+
+    setSavingClient(true)
+    setError("")
+    const payload = Object.fromEntries(
+      Object.entries(clientForm).map(([key, value]) => [key, value.trim() || null])
+    )
+
+    const { data, error: insertError } = await supabase
+      .from("clients")
+      .insert({ ...payload, created_by: session.user.id })
+      .select("id, legal_name, trade_name, tax_id, email, phone, status, created_at")
+      .single()
+
+    if (insertError) {
+      setError("No fue posible guardar el cliente. Revisa los datos e inténtalo nuevamente.")
+    } else {
+      setClients((current) => [...current, data].sort((a, b) => a.legal_name.localeCompare(b.legal_name)))
+      setClientForm({ legal_name: "", trade_name: "", tax_id: "", email: "", phone: "", notes: "" })
+      setShowClientForm(false)
+    }
+    setSavingClient(false)
+  }
+
   useEffect(() => {
     const timeout = window.setTimeout(loadData, 0)
     return () => window.clearTimeout(timeout)
@@ -244,29 +281,46 @@ function Dashboard({ session }) {
         </div>
       </header>
 
+      <nav className="internal-module-nav" aria-label="Módulos internos">
+        <button type="button" className={activeModule === "requests" ? "active" : ""} onClick={() => setActiveModule("requests")}>Solicitudes</button>
+        <button type="button" className={activeModule === "clients" ? "active" : ""} onClick={() => setActiveModule("clients")}>Clientes</button>
+        <button type="button" disabled>Proyectos <span>Próximamente</span></button>
+      </nav>
+
       <section className="internal-content">
         <div className="internal-heading-row">
           <div>
-            <p className="internal-eyebrow">SOLICITUDES</p>
-            <h1>Solicitudes de cotización</h1>
-            <p>Información recibida desde el formulario del sitio web.</p>
+            <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : "DIRECTORIO"}</p>
+            <h1>{activeModule === "requests" ? "Solicitudes de cotización" : "Clientes"}</h1>
+            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : "Empresas y personas para las que se realizan trabajos."}</p>
           </div>
-          <button type="button" className="internal-refresh" onClick={loadData} disabled={loading}>
-            <RefreshCw size={17} className={loading ? "spin" : ""} /> Actualizar
-          </button>
+          {activeModule === "requests" ? (
+            <button type="button" className="internal-refresh" onClick={loadData} disabled={loading}>
+              <RefreshCw size={17} className={loading ? "spin" : ""} /> Actualizar
+            </button>
+          ) : ["admin", "manager"].includes(profile?.role) ? (
+            <button type="button" className="internal-primary-action" onClick={() => setShowClientForm(true)}>
+              <Plus size={17} /> Nuevo cliente
+            </button>
+          ) : null}
         </div>
 
         <div className="internal-summary-grid">
-          <article><ClipboardList size={22} /><div><strong>{requests.length}</strong><span>Solicitudes visibles</span></div></article>
-          <article><Mail size={22} /><div><strong>{requests.filter((item) => item.status === "lead").length}</strong><span>Nuevas</span></div></article>
+          {activeModule === "requests" ? <>
+            <article><ClipboardList size={22} /><div><strong>{requests.length}</strong><span>Solicitudes visibles</span></div></article>
+            <article><Mail size={22} /><div><strong>{requests.filter((item) => item.status === "lead").length}</strong><span>Nuevas</span></div></article>
+          </> : <>
+            <article><Users size={22} /><div><strong>{clients.length}</strong><span>Clientes registrados</span></div></article>
+            <article><Building2 size={22} /><div><strong>{clients.filter((item) => item.status === "active").length}</strong><span>Activos</span></div></article>
+          </>}
         </div>
 
         {error && <div className="internal-alert" role="alert">{error}</div>}
 
         <div className="internal-table-card">
           {loading ? (
-            <div className="internal-empty">Cargando solicitudes…</div>
-          ) : requests.length === 0 ? (
+            <div className="internal-empty">Cargando información…</div>
+          ) : activeModule === "requests" ? (requests.length === 0 ? (
             <div className="internal-empty">Todavía no hay solicitudes registradas.</div>
           ) : (
             <div className="internal-table-wrap">
@@ -285,9 +339,52 @@ function Dashboard({ session }) {
                 </tbody>
               </table>
             </div>
+          )) : clients.length === 0 ? (
+            <div className="internal-empty">Todavía no hay clientes registrados.</div>
+          ) : (
+            <div className="internal-table-wrap">
+              <table>
+                <thead><tr><th>Razón social</th><th>Nombre comercial</th><th>RFC</th><th>Contacto</th><th>Estado</th></tr></thead>
+                <tbody>{clients.map((client) => (
+                  <tr key={client.id}>
+                    <td><strong>{client.legal_name}</strong></td>
+                    <td>{client.trade_name || "—"}</td>
+                    <td>{client.tax_id || "—"}</td>
+                    <td><strong>{client.email || "—"}</strong><span>{client.phone || "Sin teléfono"}</span></td>
+                    <td><span className={`internal-status status-${client.status}`}>{client.status === "active" ? "Activo" : client.status === "inactive" ? "Inactivo" : "Archivado"}</span></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
           )}
         </div>
       </section>
+
+      {showClientForm && (
+        <div className="internal-drawer-backdrop" onClick={() => setShowClientForm(false)}>
+          <aside className="internal-drawer" onClick={(event) => event.stopPropagation()} aria-label="Nuevo cliente">
+            <button type="button" className="internal-drawer-close" onClick={() => setShowClientForm(false)} aria-label="Cerrar"><X size={20} /></button>
+            <p className="internal-eyebrow">DIRECTORIO</p>
+            <h2>Nuevo cliente</h2>
+            <p className="internal-drawer-company">Registra los datos generales de la empresa.</p>
+            <form className="internal-form internal-client-form" onSubmit={createClient}>
+              <label htmlFor="legal-name">Razón social *</label>
+              <input id="legal-name" value={clientForm.legal_name} onChange={(event) => setClientForm({ ...clientForm, legal_name: event.target.value })} required />
+              <label htmlFor="trade-name">Nombre comercial</label>
+              <input id="trade-name" value={clientForm.trade_name} onChange={(event) => setClientForm({ ...clientForm, trade_name: event.target.value })} />
+              <label htmlFor="tax-id">RFC</label>
+              <input id="tax-id" value={clientForm.tax_id} onChange={(event) => setClientForm({ ...clientForm, tax_id: event.target.value.toUpperCase() })} />
+              <label htmlFor="client-email">Correo</label>
+              <input id="client-email" type="email" value={clientForm.email} onChange={(event) => setClientForm({ ...clientForm, email: event.target.value })} />
+              <label htmlFor="client-phone">Teléfono</label>
+              <input id="client-phone" value={clientForm.phone} onChange={(event) => setClientForm({ ...clientForm, phone: event.target.value })} />
+              <label htmlFor="client-notes">Notas</label>
+              <textarea id="client-notes" rows="4" value={clientForm.notes} onChange={(event) => setClientForm({ ...clientForm, notes: event.target.value })} />
+              <button type="submit" disabled={savingClient}>{savingClient ? "Guardando…" : "Guardar cliente"}</button>
+            </form>
+          </aside>
+        </div>
+      )}
 
       {selectedRequest && (
         <div className="internal-drawer-backdrop" onClick={() => setSelectedRequest(null)}>
