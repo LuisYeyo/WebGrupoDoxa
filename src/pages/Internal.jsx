@@ -29,6 +29,12 @@ function formatDate(value) {
   }).format(new Date(value))
 }
 
+function createProjectCode() {
+  const date = new Date().toISOString().slice(2, 10).replaceAll("-", "")
+  const random = Math.random().toString(36).slice(2, 6).toUpperCase()
+  return `PR-${date}-${random}`
+}
+
 function Login({ onAuthenticated }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -254,7 +260,7 @@ function InternalUsers({ session }) {
         <div className="internal-table-wrap"><table>
           <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
           <tbody>{users.map((user) => <tr key={user.id}>
-            <td><strong>{user.full_name || "Sin nombre"}</strong>{user.current && <span>Tu cuenta</span>}</td>
+            <td className="internal-stacked-cell"><strong>{user.full_name || "Sin nombre"}</strong>{user.current && <span>Tu cuenta</span>}</td>
             <td>{user.email}</td>
             <td>{ROLE_LABELS[user.role] || "Sin asignar"}</td>
             <td><span className={`internal-status ${user.active ? "status-active" : "status-cancelled"}`}>{user.active ? "Activo" : "Baja"}</span></td>
@@ -296,18 +302,24 @@ function Dashboard({ session }) {
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [savingStatus, setSavingStatus] = useState(false)
   const [clients, setClients] = useState([])
+  const [projects, setProjects] = useState([])
   const [activeModule, setActiveModule] = useState("requests")
   const [showClientForm, setShowClientForm] = useState(false)
   const [savingClient, setSavingClient] = useState(false)
+  const [showProjectForm, setShowProjectForm] = useState(false)
+  const [savingProject, setSavingProject] = useState(false)
   const [clientForm, setClientForm] = useState({
     legal_name: "", trade_name: "", tax_id: "", email: "", phone: "", notes: "",
+  })
+  const [projectForm, setProjectForm] = useState({
+    client_id: "", name: "", service: "", description: "", status: "lead", start_date: "", due_date: "",
   })
 
   const loadData = useCallback(async () => {
     setLoading(true)
     setError("")
 
-    const [profileResult, requestResult, clientResult] = await Promise.all([
+    const [profileResult, requestResult, clientResult, projectResult] = await Promise.all([
       supabase.from("profiles").select("full_name, role, active")
         .eq("id", session.user.id).single(),
       supabase.from("quote_requests")
@@ -316,14 +328,18 @@ function Dashboard({ session }) {
       supabase.from("clients")
         .select("id, legal_name, trade_name, tax_id, email, phone, status, created_at")
         .order("legal_name"),
+      supabase.from("projects")
+        .select("id, code, name, service, status, start_date, due_date, created_at, clients(legal_name, tax_id)")
+        .order("created_at", { ascending: false }),
     ])
 
-    if (profileResult.error || requestResult.error || clientResult.error) {
+    if (profileResult.error || requestResult.error || clientResult.error || projectResult.error) {
       setError("No se pudo cargar la información. Verifica que tu usuario esté activo.")
     } else {
       setProfile(profileResult.data)
       setRequests(requestResult.data ?? [])
       setClients(clientResult.data ?? [])
+      setProjects(projectResult.data ?? [])
     }
     setLoading(false)
   }, [session.user.id])
@@ -377,6 +393,38 @@ function Dashboard({ session }) {
     setSavingClient(false)
   }
 
+  const createProject = async (event) => {
+    event.preventDefault()
+    if (!["admin", "manager", "staff"].includes(profile?.role)) return
+
+    setSavingProject(true)
+    setError("")
+    const { data, error: insertError } = await supabase
+      .from("projects")
+      .insert({
+        client_id: projectForm.client_id,
+        code: createProjectCode(),
+        name: projectForm.name.trim(),
+        service: projectForm.service.trim() || null,
+        description: projectForm.description.trim() || null,
+        status: projectForm.status,
+        start_date: projectForm.start_date || null,
+        due_date: projectForm.due_date || null,
+        created_by: session.user.id,
+      })
+      .select("id, code, name, service, status, start_date, due_date, created_at, clients(legal_name, tax_id)")
+      .single()
+
+    if (insertError) {
+      setError("No fue posible guardar el trabajo. Verifica el cliente y las fechas.")
+    } else {
+      setProjects((current) => [data, ...current])
+      setProjectForm({ client_id: "", name: "", service: "", description: "", status: "lead", start_date: "", due_date: "" })
+      setShowProjectForm(false)
+    }
+    setSavingProject(false)
+  }
+
   useEffect(() => {
     const timeout = window.setTimeout(loadData, 0)
     return () => window.clearTimeout(timeout)
@@ -406,15 +454,15 @@ function Dashboard({ session }) {
         <button type="button" className={activeModule === "requests" ? "active" : ""} onClick={() => setActiveModule("requests")}>Solicitudes</button>
         <button type="button" className={activeModule === "clients" ? "active" : ""} onClick={() => setActiveModule("clients")}>Clientes</button>
         {profile?.role === "admin" && <button type="button" className={activeModule === "users" ? "active" : ""} onClick={() => setActiveModule("users")}>Personal</button>}
-        <button type="button" disabled>Proyectos <span>Próximamente</span></button>
+        <button type="button" className={activeModule === "projects" ? "active" : ""} onClick={() => setActiveModule("projects")}>Proyectos</button>
       </nav>
 
       <section className="internal-content">
         <div className="internal-heading-row">
           <div>
-            <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : "ADMINISTRACIÓN"}</p>
-            <h1>{activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : "Personal"}</h1>
-            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : "Invitaciones, roles y acceso al sistema interno."}</p>
+            <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : activeModule === "projects" ? "OPERACIONES" : "ADMINISTRACIÓN"}</p>
+            <h1>{activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : activeModule === "projects" ? "Proyectos y trabajos" : "Personal"}</h1>
+            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : "Invitaciones, roles y acceso al sistema interno."}</p>
           </div>
           {activeModule === "requests" ? (
             <button type="button" className="internal-refresh" onClick={loadData} disabled={loading}>
@@ -424,6 +472,10 @@ function Dashboard({ session }) {
             <button type="button" className="internal-primary-action" onClick={() => setShowClientForm(true)}>
               <Plus size={17} /> Nuevo cliente
             </button>
+          ) : activeModule === "projects" && ["admin", "manager", "staff"].includes(profile?.role) ? (
+            <button type="button" className="internal-primary-action" onClick={() => setShowProjectForm(true)}>
+              <Plus size={17} /> Nuevo trabajo
+            </button>
           ) : null}
         </div>
 
@@ -431,9 +483,12 @@ function Dashboard({ session }) {
           {activeModule === "requests" ? <>
             <article><ClipboardList size={22} /><div><strong>{requests.length}</strong><span>Solicitudes visibles</span></div></article>
             <article><Mail size={22} /><div><strong>{requests.filter((item) => item.status === "lead").length}</strong><span>Nuevas</span></div></article>
-          </> : <>
+          </> : activeModule === "clients" ? <>
             <article><Users size={22} /><div><strong>{clients.length}</strong><span>Clientes registrados</span></div></article>
             <article><Building2 size={22} /><div><strong>{clients.filter((item) => item.status === "active").length}</strong><span>Activos</span></div></article>
+          </> : <>
+            <article><ClipboardList size={22} /><div><strong>{projects.length}</strong><span>Trabajos registrados</span></div></article>
+            <article><RefreshCw size={22} /><div><strong>{projects.filter((item) => item.status === "in_progress").length}</strong><span>En proceso</span></div></article>
           </>}
         </div>}
 
@@ -452,7 +507,7 @@ function Dashboard({ session }) {
                   {requests.map((request) => (
                     <tr key={request.id} className="internal-clickable-row" onClick={() => setSelectedRequest(request)}>
                       <td><strong>{request.request_code}</strong></td>
-                      <td><strong>{request.requester_name}</strong><span>{request.company_name || request.email}</span></td>
+                      <td className="internal-stacked-cell"><strong>{request.requester_name}</strong><span>{request.company_name || request.email}</span></td>
                       <td>{request.service}</td>
                       <td><span className={`internal-status status-${request.status}`}>{STATUS_LABELS[request.status] || request.status}</span></td>
                       <td>{formatDate(request.received_at)}</td>
@@ -461,7 +516,7 @@ function Dashboard({ session }) {
                 </tbody>
               </table>
             </div>
-          )) : clients.length === 0 ? (
+          )) : activeModule === "clients" ? (clients.length === 0 ? (
             <div className="internal-empty">Todavía no hay clientes registrados.</div>
           ) : (
             <div className="internal-table-wrap">
@@ -472,12 +527,26 @@ function Dashboard({ session }) {
                     <td><strong>{client.legal_name}</strong></td>
                     <td>{client.trade_name || "—"}</td>
                     <td>{client.tax_id || "—"}</td>
-                    <td><strong>{client.email || "—"}</strong><span>{client.phone || "Sin teléfono"}</span></td>
+                    <td className="internal-stacked-cell"><strong>{client.email || "—"}</strong><span>{client.phone || "Sin teléfono"}</span></td>
                     <td><span className={`internal-status status-${client.status}`}>{client.status === "active" ? "Activo" : client.status === "inactive" ? "Inactivo" : "Archivado"}</span></td>
                   </tr>
                 ))}</tbody>
               </table>
             </div>
+          )) : projects.length === 0 ? (
+            <div className="internal-empty">Todavía no hay proyectos o trabajos registrados.</div>
+          ) : (
+            <div className="internal-table-wrap"><table>
+              <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Servicio</th><th>Estado</th><th>Inicio</th></tr></thead>
+              <tbody>{projects.map((project) => <tr key={project.id}>
+                <td><strong>{project.code}</strong></td>
+                <td>{project.name}</td>
+                <td className="internal-stacked-cell"><strong>{project.clients?.legal_name || "—"}</strong><span>{project.clients?.tax_id || "Sin RFC"}</span></td>
+                <td>{project.service || "—"}</td>
+                <td><span className={`internal-status status-${project.status}`}>{STATUS_LABELS[project.status] || project.status}</span></td>
+                <td>{project.start_date || "Por definir"}</td>
+              </tr>)}</tbody>
+            </table></div>
           )}
         </div>}
       </section>
@@ -503,6 +572,40 @@ function Dashboard({ session }) {
               <label htmlFor="client-notes">Notas</label>
               <textarea id="client-notes" rows="4" value={clientForm.notes} onChange={(event) => setClientForm({ ...clientForm, notes: event.target.value })} />
               <button type="submit" disabled={savingClient}>{savingClient ? "Guardando…" : "Guardar cliente"}</button>
+            </form>
+          </aside>
+        </div>
+      )}
+
+      {showProjectForm && (
+        <div className="internal-drawer-backdrop" onClick={() => setShowProjectForm(false)}>
+          <aside className="internal-drawer" onClick={(event) => event.stopPropagation()} aria-label="Nuevo trabajo">
+            <button type="button" className="internal-drawer-close" onClick={() => setShowProjectForm(false)} aria-label="Cerrar"><X size={20} /></button>
+            <p className="internal-eyebrow">OPERACIONES</p>
+            <h2>Nuevo trabajo</h2>
+            <p className="internal-drawer-company">Asocia el servicio con un cliente registrado.</p>
+            <form className="internal-form internal-client-form" onSubmit={createProject}>
+              <label htmlFor="project-client">Cliente / RFC *</label>
+              <select id="project-client" value={projectForm.client_id} onChange={(event) => setProjectForm({ ...projectForm, client_id: event.target.value })} required>
+                <option value="">Selecciona un cliente</option>
+                {clients.map((client) => <option key={client.id} value={client.id}>{client.legal_name}{client.tax_id ? ` — ${client.tax_id}` : ""}</option>)}
+              </select>
+              {clients.length === 0 && <div className="internal-form-hint">Primero un administrador o gerente debe registrar al cliente.</div>}
+              <label htmlFor="project-name">Nombre del trabajo *</label>
+              <input id="project-name" value={projectForm.name} onChange={(event) => setProjectForm({ ...projectForm, name: event.target.value })} required />
+              <label htmlFor="project-service">Servicio</label>
+              <input id="project-service" placeholder="Ej. Fabricación de tubería" value={projectForm.service} onChange={(event) => setProjectForm({ ...projectForm, service: event.target.value })} />
+              <label htmlFor="project-description">Descripción</label>
+              <textarea id="project-description" rows="4" value={projectForm.description} onChange={(event) => setProjectForm({ ...projectForm, description: event.target.value })} />
+              <label htmlFor="project-status">Estado</label>
+              <select id="project-status" value={projectForm.status} onChange={(event) => setProjectForm({ ...projectForm, status: event.target.value })}>
+                {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <div className="internal-form-columns">
+                <div><label htmlFor="project-start">Fecha de inicio</label><input id="project-start" type="date" value={projectForm.start_date} onChange={(event) => setProjectForm({ ...projectForm, start_date: event.target.value })} /></div>
+                <div><label htmlFor="project-due">Fecha de entrega</label><input id="project-due" type="date" min={projectForm.start_date || undefined} value={projectForm.due_date} onChange={(event) => setProjectForm({ ...projectForm, due_date: event.target.value })} /></div>
+              </div>
+              <button type="submit" disabled={savingProject || clients.length === 0}>{savingProject ? "Guardando…" : "Guardar trabajo"}</button>
             </form>
           </aside>
         </div>
