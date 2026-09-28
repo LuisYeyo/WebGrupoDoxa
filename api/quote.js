@@ -1,4 +1,6 @@
 import { Resend } from "resend"
+import process from "node:process"
+import { enforceRateLimit, verifyCaptcha } from "./_security.js"
 
 const resend =
   new Resend(
@@ -46,10 +48,13 @@ export default async function handler(
   req,
   res
 ) {
+  res.setHeader("Cache-Control", "no-store")
+
   /*
     Solamente permitimos POST.
   */
   if (req.method !== "POST") {
+    res.setHeader("Allow", "POST")
     return res
       .status(405)
       .json({
@@ -60,6 +65,11 @@ export default async function handler(
   }
 
   try {
+    if (!(await enforceRateLimit(req))) {
+      res.setHeader("Retry-After", "3600")
+      return res.status(429).json({ success: false, message: "Too many requests. Try again later." })
+    }
+
     const {
       name,
       company,
@@ -74,6 +84,7 @@ export default async function handler(
         debería llenar esto.
       */
       website,
+      captchaToken,
     } = req.body ?? {}
 
     /*
@@ -85,6 +96,14 @@ export default async function handler(
         .json({
           success: true,
         })
+    }
+
+    const remoteIp = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "")
+      .split(",")[0]
+      .trim()
+
+    if (!(await verifyCaptcha(captchaToken, remoteIp || undefined))) {
+      return res.status(400).json({ success: false, message: "Captcha verification failed" })
     }
 
     /*
@@ -127,9 +146,9 @@ export default async function handler(
     */
     if (
       String(name).length > 100 ||
-      String(company).length > 150 ||
+      String(company || "").length > 150 ||
       String(email).length > 200 ||
-      String(phone).length > 50 ||
+      String(phone || "").length > 50 ||
       String(service).length > 100 ||
       String(message).length > 5000
     ) {

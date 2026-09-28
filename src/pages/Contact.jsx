@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useState,
 } from "react"
 
@@ -32,6 +33,7 @@ import {
 } from "../context/LanguageContext"
 
 import PageReveal from "../components/ui/PageReveal"
+import Turnstile from "../components/ui/Turnstile"
 
 
 const contacts = [
@@ -55,6 +57,28 @@ const contacts = [
   },
 ]
 
+const INITIAL_FORM = {
+  name: "",
+  company: "",
+  email: "",
+  phone: "",
+  service: "",
+  message: "",
+  website: "",
+}
+
+const services = [
+  { value: "Fabricación", es: "Fabricación", en: "Fabrication" },
+  { value: "Mantenimiento", es: "Mantenimiento", en: "Maintenance" },
+  { value: "Montaje", es: "Montaje", en: "Installation" },
+  { value: "Tubería industrial", es: "Tubería industrial", en: "Industrial piping" },
+  { value: "Perforación", es: "Perforación", en: "Drilling" },
+  { value: "Aislamiento industrial", es: "Aislamiento industrial", en: "Industrial insulation" },
+  { value: "Sandblast y pintura", es: "Sandblast y pintura", en: "Sandblasting and painting" },
+  { value: "Renta de equipo", es: "Renta de equipo", en: "Equipment rental" },
+  { value: "Otro", es: "Otro", en: "Other" },
+]
+
 
 function Contact() {
   const navigate =
@@ -66,22 +90,11 @@ function Contact() {
   } = useLanguage()
 
 
-  const initialForm = {
-    name: "",
-    company: "",
-    email: "",
-    phone: "",
-    service: "",
-    message: "",
-    website: "",
-  }
-
-
   const [
     form,
     setForm,
   ] = useState(
-    initialForm
+    INITIAL_FORM
   )
 
 
@@ -103,62 +116,9 @@ function Contact() {
   ] = useState("")
 
 
-  const services = [
-    {
-      value: "Fabricación",
-      es: "Fabricación",
-      en: "Fabrication",
-    },
-
-    {
-      value: "Mantenimiento",
-      es: "Mantenimiento",
-      en: "Maintenance",
-    },
-
-    {
-      value: "Montaje",
-      es: "Montaje",
-      en: "Installation",
-    },
-
-    {
-      value: "Tubería industrial",
-      es: "Tubería industrial",
-      en: "Industrial piping",
-    },
-
-    {
-      value: "Perforación",
-      es: "Perforación",
-      en: "Drilling",
-    },
-
-    {
-      value: "Aislamiento industrial",
-      es: "Aislamiento industrial",
-      en: "Industrial insulation",
-    },
-
-    {
-      value: "Sandblast y pintura",
-      es: "Sandblast y pintura",
-      en: "Sandblasting and painting",
-    },
-
-    {
-      value: "Renta de equipo",
-      es: "Renta de equipo",
-      en: "Equipment rental",
-    },
-
-    {
-      value: "Otro",
-      es: "Otro",
-      en: "Other",
-    },
-  ]
-
+  const [captchaToken, setCaptchaToken] = useState("")
+  const [captchaReset, setCaptchaReset] = useState(0)
+  const handleCaptcha = useCallback((token) => setCaptchaToken(token), [])
 
   const handleChange =
     (event) => {
@@ -189,6 +149,12 @@ function Contact() {
         return
       }
 
+      if (!captchaToken) {
+        setStatus("error")
+        setErrorMessage(t("Completa la verificación antes de enviar.", "Complete the verification before sending."))
+        return
+      }
+
 
       setStatus(
         "sending"
@@ -212,7 +178,7 @@ function Contact() {
 
               body:
                 JSON.stringify(
-                  form
+                  { ...form, captchaToken }
                 ),
             }
           )
@@ -253,18 +219,22 @@ function Contact() {
         )
 
         setErrorMessage(
-          t(
+          error.message === "Too many requests. Try again later."
+            ? t("Demasiados intentos. Inténtalo más tarde.", "Too many requests. Try again later.")
+            : t(
             "No pudimos enviar tu solicitud. Inténtalo nuevamente o comunícate directamente con nosotros.",
             "We couldn't send your request. Please try again or contact us directly."
           )
         )
+        setCaptchaToken("")
+        setCaptchaReset((current) => current + 1)
       }
     }
 
 
   const resetForm = () => {
     setForm(
-      initialForm
+      INITIAL_FORM
     )
 
     setRequestId("")
@@ -272,6 +242,8 @@ function Contact() {
     setErrorMessage("")
 
     setStatus("idle")
+    setCaptchaToken("")
+    setCaptchaReset((current) => current + 1)
   }
 
 
@@ -1053,6 +1025,8 @@ function Contact() {
                     </div>
 
 
+                    <Turnstile onVerify={handleCaptcha} resetKey={captchaReset} />
+
                     {/* ERROR */}
 
                     {status ===
@@ -1113,7 +1087,7 @@ function Contact() {
                       type="submit"
                       disabled={
                         status ===
-                        "sending"
+                        "sending" || !captchaToken
                       }
                       className="
                         group

@@ -1,4 +1,9 @@
 import {
+  lazy,
+  Suspense,
+} from "react"
+
+import {
   Navigate,
   Route,
   Routes,
@@ -6,26 +11,27 @@ import {
 
 import MainLayout from "./components/layout/MainLayout"
 
-import Home from "./pages/Home"
-import Group from "./pages/Group"
-import Services from "./pages/Services"
-import ServiceDetail from "./pages/ServiceDetail"
-import Infrastructure from "./pages/Infrastructure"
-import Rental from "./pages/Rental"
-import Projects from "./pages/Projects";
-import ProjectDetail from "./pages/ProjectDetail";
-import Contact from "./pages/Contact"
-import CompanyDetail from "./pages/CompanyDetail"
-import Privacy from "./pages/Privacy"
-import NotFound from "./pages/NotFound"
-import Doxa from "./pages/Doxa";
-import Remsa from "./pages/Remsa";
-import Secmimar from "./pages/Secmimar";
-import DoxaMaintenance from "./pages/DoxaMaintenance";
+const Home = lazy(() => import("./pages/Home"))
+const Group = lazy(() => import("./pages/Group"))
+const Services = lazy(() => import("./pages/Services"))
+const ServiceDetail = lazy(() => import("./pages/ServiceDetail"))
+const Infrastructure = lazy(() => import("./pages/Infrastructure"))
+const Rental = lazy(() => import("./pages/Rental"))
+const Projects = lazy(() => import("./pages/Projects"))
+const ProjectDetail = lazy(() => import("./pages/ProjectDetail"))
+const Contact = lazy(() => import("./pages/Contact"))
+const CompanyDetail = lazy(() => import("./pages/CompanyDetail"))
+const Privacy = lazy(() => import("./pages/Privacy"))
+const NotFound = lazy(() => import("./pages/NotFound"))
+const Doxa = lazy(() => import("./pages/Doxa"))
+const Remsa = lazy(() => import("./pages/Remsa"))
+const Secmimar = lazy(() => import("./pages/Secmimar"))
+const DoxaMaintenance = lazy(() => import("./pages/DoxaMaintenance"))
 
 function App() {
   return (
-    <Routes>
+    <Suspense fallback={<div className="min-h-screen bg-white" aria-label="Cargando página" />}>
+      <Routes>
       <Route element={<MainLayout />}>
         {/* INICIO */}
         <Route
@@ -142,7 +148,8 @@ function App() {
         element={<DoxaMaintenance />}
         />
       </Route>
-    </Routes>
+      </Routes>
+    </Suspense>
   )
 }
 
