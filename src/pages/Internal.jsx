@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Building2, ClipboardList, LogOut, Mail, RefreshCw, ShieldCheck } from "lucide-react"
+import { Building2, ClipboardList, LogOut, Mail, RefreshCw, ShieldCheck, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -172,6 +172,8 @@ function Dashboard({ session }) {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [selectedRequest, setSelectedRequest] = useState(null)
+  const [savingStatus, setSavingStatus] = useState(false)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -181,7 +183,7 @@ function Dashboard({ session }) {
       supabase.from("profiles").select("full_name, role, active")
         .eq("id", session.user.id).single(),
       supabase.from("quote_requests")
-        .select("id, request_code, requester_name, company_name, email, phone, service, status, received_at")
+        .select("id, request_code, requester_name, company_name, email, phone, service, message, status, received_at")
         .order("received_at", { ascending: false }).limit(100),
     ])
 
@@ -193,6 +195,29 @@ function Dashboard({ session }) {
     }
     setLoading(false)
   }, [session.user.id])
+
+  const updateStatus = async (status) => {
+    if (!selectedRequest || !["admin", "manager"].includes(profile?.role)) return
+
+    setSavingStatus(true)
+    setError("")
+
+    const { error: updateError } = await supabase
+      .from("quote_requests")
+      .update({ status })
+      .eq("id", selectedRequest.id)
+
+    if (updateError) {
+      setError("No fue posible actualizar el estado de la solicitud.")
+    } else {
+      setRequests((current) => current.map((item) =>
+        item.id === selectedRequest.id ? { ...item, status } : item
+      ))
+      setSelectedRequest((current) => ({ ...current, status }))
+    }
+
+    setSavingStatus(false)
+  }
 
   useEffect(() => {
     const timeout = window.setTimeout(loadData, 0)
@@ -249,7 +274,7 @@ function Dashboard({ session }) {
                 <thead><tr><th>Folio</th><th>Cliente</th><th>Servicio</th><th>Estado</th><th>Recibida</th></tr></thead>
                 <tbody>
                   {requests.map((request) => (
-                    <tr key={request.id}>
+                    <tr key={request.id} className="internal-clickable-row" onClick={() => setSelectedRequest(request)}>
                       <td><strong>{request.request_code}</strong></td>
                       <td><strong>{request.requester_name}</strong><span>{request.company_name || request.email}</span></td>
                       <td>{request.service}</td>
@@ -263,6 +288,41 @@ function Dashboard({ session }) {
           )}
         </div>
       </section>
+
+      {selectedRequest && (
+        <div className="internal-drawer-backdrop" onClick={() => setSelectedRequest(null)}>
+          <aside className="internal-drawer" onClick={(event) => event.stopPropagation()} aria-label="Detalle de solicitud">
+            <button type="button" className="internal-drawer-close" onClick={() => setSelectedRequest(null)} aria-label="Cerrar">
+              <X size={20} />
+            </button>
+
+            <p className="internal-eyebrow">{selectedRequest.request_code}</p>
+            <h2>{selectedRequest.requester_name}</h2>
+            <p className="internal-drawer-company">{selectedRequest.company_name || "Sin empresa indicada"}</p>
+
+            <dl className="internal-detail-list">
+              <div><dt>Servicio</dt><dd>{selectedRequest.service}</dd></div>
+              <div><dt>Correo</dt><dd><a href={`mailto:${selectedRequest.email}`}>{selectedRequest.email}</a></dd></div>
+              <div><dt>Teléfono</dt><dd>{selectedRequest.phone ? <a href={`tel:${selectedRequest.phone}`}>{selectedRequest.phone}</a> : "No indicado"}</dd></div>
+              <div><dt>Recibida</dt><dd>{formatDate(selectedRequest.received_at)}</dd></div>
+            </dl>
+
+            <div className="internal-message-box">
+              <span>Descripción del proyecto</span>
+              <p>{selectedRequest.message}</p>
+            </div>
+
+            <label className="internal-status-field" htmlFor="request-status">Estado</label>
+            <select id="request-status" value={selectedRequest.status}
+              onChange={(event) => updateStatus(event.target.value)}
+              disabled={savingStatus || !["admin", "manager"].includes(profile?.role)}>
+              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </aside>
+        </div>
+      )}
     </main>
   )
 }
