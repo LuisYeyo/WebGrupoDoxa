@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { Building2, ClipboardList, LogOut, Mail, Plus, RefreshCw, ShieldCheck, Users, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
-import { isSupabaseConfigured, supabase } from "../utils/supabase"
+import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
 
 const ROLE_LABELS = {
@@ -701,10 +701,7 @@ function Dashboard({ session }) {
 function Internal() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(isSupabaseConfigured)
-  const [settingPassword, setSettingPassword] = useState(() =>
-    window.location.hash.includes("type=invite") ||
-    window.location.hash.includes("type=recovery")
-  )
+  const [settingPassword, setSettingPassword] = useState(hasAuthSetupParams)
 
   useEffect(() => {
     if (!supabase) {
@@ -716,7 +713,10 @@ function Internal() {
       setLoading(false)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setSettingPassword(true)
+      }
       setSession(nextSession)
       setLoading(false)
     })
