@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Building2, Camera, Check, ClipboardList, Download, Eye, EyeOff, FileText, Lightbulb, LogOut, Mail, Pencil, Plus, RefreshCw, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
+import { AlertTriangle, Building2, CalendarDays, Camera, Check, ClipboardList, Download, Eye, EyeOff, FileText, Lightbulb, LogOut, Mail, Pencil, Plus, RefreshCw, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -478,6 +478,7 @@ function InternalUsers({ session }) {
 }
 
 function Dashboard({ session }) {
+  const [dashboardDate] = useState(() => new Date())
   const [profile, setProfile] = useState(null)
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -500,7 +501,7 @@ function Dashboard({ session }) {
   const [savingLesson, setSavingLesson] = useState(false)
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const [uploadingDocument, setUploadingDocument] = useState(false)
-  const [activeModule, setActiveModule] = useState("requests")
+  const [activeModule, setActiveModule] = useState("dashboard")
   const [showClientForm, setShowClientForm] = useState(false)
   const [editingClient, setEditingClient] = useState(null)
   const [savingClient, setSavingClient] = useState(false)
@@ -539,6 +540,15 @@ function Dashboard({ session }) {
   })
 
   const canEditOperations = ["admin", "manager", "supervisor", "staff"].includes(profile?.role)
+  const today = dashboardDate.toISOString().slice(0, 10)
+  const nextThirtyDays = new Date(dashboardDate.getTime() + 30 * 86400000).toISOString().slice(0, 10)
+  const openProjectStatuses = ["lead", "quoted", "approved", "in_progress", "on_hold"]
+  const openWorkOrderStatuses = ["pending", "scheduled", "in_progress", "blocked"]
+  const activeProjects = projects.filter((project) => openProjectStatuses.includes(project.status))
+  const overdueWorkOrders = workOrders.filter((order) => order.due_date && order.due_date < today && openWorkOrderStatuses.includes(order.status))
+  const upcomingProjects = projects.filter((project) => project.due_date && project.due_date >= today && project.due_date <= nextThirtyDays && openProjectStatuses.includes(project.status)).sort((a, b) => a.due_date.localeCompare(b.due_date))
+  const upcomingMaintenance = equipment.filter((item) => item.next_maintenance_date && item.next_maintenance_date >= today && item.next_maintenance_date <= nextThirtyDays && item.status === "active").sort((a, b) => a.next_maintenance_date.localeCompare(b.next_maintenance_date))
+  const myWorkOrders = workOrders.filter((order) => order.assigned_to === session.user.id && openWorkOrderStatuses.includes(order.status))
 
   const openProject = async (project) => {
     setSelectedProject(project)
@@ -1154,6 +1164,7 @@ function Dashboard({ session }) {
       </header>
 
       <nav className="internal-module-nav" aria-label="Módulos internos">
+        <button type="button" className={activeModule === "dashboard" ? "active" : ""} onClick={() => setActiveModule("dashboard")}>Inicio</button>
         <button type="button" className={activeModule === "requests" ? "active" : ""} onClick={() => setActiveModule("requests")}>Solicitudes</button>
         <button type="button" className={activeModule === "clients" ? "active" : ""} onClick={() => setActiveModule("clients")}>Clientes</button>
         <button type="button" className={activeModule === "locations" ? "active" : ""} onClick={() => setActiveModule("locations")}>Talleres y ubicaciones</button>
@@ -1166,11 +1177,11 @@ function Dashboard({ session }) {
       <section className="internal-content">
         <div className="internal-heading-row">
           <div>
-            <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : ["locations", "equipment", "workOrders", "projects"].includes(activeModule) ? "OPERACIONES" : "ADMINISTRACIÓN"}</p>
-            <h1>{activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : activeModule === "locations" ? "Talleres y ubicaciones" : activeModule === "equipment" ? "Maquinaria y equipo" : activeModule === "workOrders" ? "Órdenes de trabajo" : activeModule === "projects" ? "Proyectos y trabajos" : "Personal"}</h1>
-            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "locations" ? "Talleres del grupo, instalaciones de clientes y sitios externos de trabajo." : activeModule === "equipment" ? "Inventario, ubicación y disponibilidad de los equipos operativos." : activeModule === "workOrders" ? "Actividades asignadas al personal para ejecutar cada proyecto." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : "Invitaciones, roles y acceso al sistema interno."}</p>
+            <p className="internal-eyebrow">{activeModule === "dashboard" ? "RESUMEN OPERATIVO" : activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : ["locations", "equipment", "workOrders", "projects"].includes(activeModule) ? "OPERACIONES" : "ADMINISTRACIÓN"}</p>
+            <h1>{activeModule === "dashboard" ? `Hola, ${profile?.full_name?.split(" ")[0] || "equipo"}` : activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : activeModule === "locations" ? "Talleres y ubicaciones" : activeModule === "equipment" ? "Maquinaria y equipo" : activeModule === "workOrders" ? "Órdenes de trabajo" : activeModule === "projects" ? "Proyectos y trabajos" : "Personal"}</h1>
+            <p>{activeModule === "dashboard" ? "Revisa el trabajo pendiente, las entregas y el mantenimiento próximo." : activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "locations" ? "Talleres del grupo, instalaciones de clientes y sitios externos de trabajo." : activeModule === "equipment" ? "Inventario, ubicación y disponibilidad de los equipos operativos." : activeModule === "workOrders" ? "Actividades asignadas al personal para ejecutar cada proyecto." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : "Invitaciones, roles y acceso al sistema interno."}</p>
           </div>
-          {activeModule === "requests" ? (
+          {["dashboard", "requests"].includes(activeModule) ? (
             <button type="button" className="internal-refresh" onClick={loadData} disabled={loading}>
               <RefreshCw size={17} className={loading ? "spin" : ""} /> Actualizar
             </button>
@@ -1194,7 +1205,12 @@ function Dashboard({ session }) {
         </div>
 
         {activeModule !== "users" && <div className="internal-summary-grid">
-          {activeModule === "requests" ? <>
+          {activeModule === "dashboard" ? <>
+            <article><ClipboardList size={22} /><div><strong>{activeProjects.length}</strong><span>Proyectos activos</span></div></article>
+            <article><AlertTriangle size={22} /><div><strong>{overdueWorkOrders.length}</strong><span>Órdenes vencidas</span></div></article>
+            <article><CalendarDays size={22} /><div><strong>{upcomingProjects.length}</strong><span>Entregas en 30 días</span></div></article>
+            <article><Wrench size={22} /><div><strong>{upcomingMaintenance.length}</strong><span>Mantenimientos próximos</span></div></article>
+          </> : activeModule === "requests" ? <>
             <article><ClipboardList size={22} /><div><strong>{requests.length}</strong><span>Solicitudes visibles</span></div></article>
             <article><Mail size={22} /><div><strong>{requests.filter((item) => item.status === "lead").length}</strong><span>Nuevas</span></div></article>
           </> : activeModule === "clients" ? <>
@@ -1217,7 +1233,21 @@ function Dashboard({ session }) {
 
         {error && <div className="internal-alert" role="alert">{error}</div>}
 
-        {activeModule === "users" ? <InternalUsers session={session} /> : <div className="internal-table-card">
+        {activeModule === "users" ? <InternalUsers session={session} /> : activeModule === "dashboard" ? <div className="dashboard-panels">
+          <section className="dashboard-panel dashboard-panel-wide">
+            <div className="dashboard-panel-heading"><div><ClipboardList size={20} /><h2>Mis órdenes pendientes</h2></div><button type="button" onClick={() => setActiveModule("workOrders")}>Ver todas</button></div>
+            {myWorkOrders.length === 0 ? <p className="dashboard-empty">No tienes órdenes pendientes asignadas.</p> : <div className="dashboard-list">{myWorkOrders.slice(0, 6).map((order) => <article key={order.id}><div><strong>{order.title}</strong><span>{order.projects?.name || "Proyecto"} · {order.code}</span></div><div><span className={`internal-status status-${order.status}`}>{WORK_ORDER_STATUS_LABELS[order.status]}</span><small>{order.due_date ? `Entrega ${order.due_date}` : "Sin fecha de entrega"}</small></div></article>)}</div>}
+          </section>
+          <section className="dashboard-panel">
+            <div className="dashboard-panel-heading"><div><CalendarDays size={20} /><h2>Próximas entregas</h2></div></div>
+            {upcomingProjects.length === 0 ? <p className="dashboard-empty">No hay entregas en los próximos 30 días.</p> : <div className="dashboard-compact-list">{upcomingProjects.slice(0, 6).map((project) => <button type="button" key={project.id} onClick={() => openProject(project)}><div><strong>{project.name}</strong><span>{project.clients?.legal_name || "Sin cliente"}</span></div><time>{project.due_date}</time></button>)}</div>}
+          </section>
+          <section className="dashboard-panel">
+            <div className="dashboard-panel-heading"><div><Wrench size={20} /><h2>Mantenimiento próximo</h2></div></div>
+            {upcomingMaintenance.length === 0 ? <p className="dashboard-empty">No hay mantenimientos programados en 30 días.</p> : <div className="dashboard-compact-list">{upcomingMaintenance.slice(0, 6).map((item) => <button type="button" key={item.id} onClick={() => ["admin", "manager", "supervisor"].includes(profile?.role) && setEditingEquipment({ ...item })}><div><strong>{item.name}</strong><span>{item.internal_code} · {item.work_locations?.name || "Sin ubicación"}</span></div><time>{item.next_maintenance_date}</time></button>)}</div>}
+          </section>
+          {overdueWorkOrders.length > 0 && <section className="dashboard-panel dashboard-panel-wide dashboard-warning-panel"><div className="dashboard-panel-heading"><div><AlertTriangle size={20} /><h2>Órdenes vencidas</h2></div></div><div className="dashboard-list">{overdueWorkOrders.slice(0, 6).map((order) => <article key={order.id}><div><strong>{order.title}</strong><span>{order.projects?.name || "Proyecto"} · {order.profiles?.full_name || "Sin responsable"}</span></div><div><span className={`internal-status status-${order.status}`}>{WORK_ORDER_STATUS_LABELS[order.status]}</span><small>Venció {order.due_date}</small></div></article>)}</div></section>}
+        </div> : <div className="internal-table-card">
           {loading ? (
             <div className="internal-empty">Cargando información…</div>
           ) : activeModule === "requests" ? (requests.length === 0 ? (
