@@ -36,6 +36,12 @@ function createProjectCode() {
   return `PR-${date}-${random}`
 }
 
+function locationTypeLabel(location) {
+  if (location.kind === "company_workshop") return `Taller ${location.workshop_number}`
+  if (location.kind === "client_site") return "Instalaciones del cliente"
+  return "Ubicación externa"
+}
+
 function Login({ onAuthenticated, authLinkInvalid = false }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -423,6 +429,7 @@ function Dashboard({ session }) {
   const [savingStatus, setSavingStatus] = useState(false)
   const [clients, setClients] = useState([])
   const [projects, setProjects] = useState([])
+  const [locations, setLocations] = useState([])
   const [selectedProject, setSelectedProject] = useState(null)
   const [projectLessons, setProjectLessons] = useState([])
   const [projectPhotos, setProjectPhotos] = useState([])
@@ -433,12 +440,17 @@ function Dashboard({ session }) {
   const [showClientForm, setShowClientForm] = useState(false)
   const [savingClient, setSavingClient] = useState(false)
   const [showProjectForm, setShowProjectForm] = useState(false)
+  const [showLocationForm, setShowLocationForm] = useState(false)
   const [savingProject, setSavingProject] = useState(false)
+  const [savingLocation, setSavingLocation] = useState(false)
   const [clientForm, setClientForm] = useState({
     legal_name: "", trade_name: "", tax_id: "", email: "", phone: "", notes: "",
   })
   const [projectForm, setProjectForm] = useState({
-    client_id: "", name: "", service: "", description: "", status: "lead", start_date: "", due_date: "",
+    client_id: "", location_id: "", name: "", service: "", description: "", status: "lead", start_date: "", due_date: "",
+  })
+  const [locationForm, setLocationForm] = useState({
+    kind: "client_site", client_id: "", name: "", address_line: "", city: "", state: "Tamaulipas", postal_code: "", notes: "",
   })
   const [lessonForm, setLessonForm] = useState({
     category: "challenge", title: "", situation: "", lesson: "",
@@ -565,7 +577,7 @@ function Dashboard({ session }) {
     setLoading(true)
     setError("")
 
-    const [profileResult, requestResult, clientResult, projectResult] = await Promise.all([
+    const [profileResult, requestResult, clientResult, projectResult, locationResult] = await Promise.all([
       supabase.from("profiles").select("full_name, role, active")
         .eq("id", session.user.id).single(),
       supabase.from("quote_requests")
@@ -575,17 +587,21 @@ function Dashboard({ session }) {
         .select("id, legal_name, trade_name, tax_id, email, phone, status, created_at")
         .order("legal_name"),
       supabase.from("projects")
-        .select("id, code, name, service, status, start_date, due_date, created_at, clients(legal_name, tax_id)")
+        .select("id, code, name, service, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
         .order("created_at", { ascending: false }),
+      supabase.from("work_locations")
+        .select("id, client_id, name, kind, workshop_number, address_line, city, state, postal_code, notes, status, clients(legal_name)")
+        .order("kind").order("workshop_number").order("name"),
     ])
 
-    if (profileResult.error || requestResult.error || clientResult.error || projectResult.error) {
+    if (profileResult.error || requestResult.error || clientResult.error || projectResult.error || locationResult.error) {
       setError("No se pudo cargar la información. Verifica que tu usuario esté activo.")
     } else {
       setProfile(profileResult.data)
       setRequests(requestResult.data ?? [])
       setClients(clientResult.data ?? [])
       setProjects(projectResult.data ?? [])
+      setLocations(locationResult.data ?? [])
     }
     setLoading(false)
   }, [session.user.id])
@@ -649,6 +665,7 @@ function Dashboard({ session }) {
       .from("projects")
       .insert({
         client_id: projectForm.client_id,
+        location_id: projectForm.location_id || null,
         code: createProjectCode(),
         name: projectForm.name.trim(),
         service: projectForm.service.trim() || null,
@@ -658,17 +675,52 @@ function Dashboard({ session }) {
         due_date: projectForm.due_date || null,
         created_by: session.user.id,
       })
-      .select("id, code, name, service, status, start_date, due_date, created_at, clients(legal_name, tax_id)")
+      .select("id, code, name, service, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
       .single()
 
     if (insertError) {
       setError("No fue posible guardar el trabajo. Verifica el cliente y las fechas.")
     } else {
       setProjects((current) => [data, ...current])
-      setProjectForm({ client_id: "", name: "", service: "", description: "", status: "lead", start_date: "", due_date: "" })
+      setProjectForm({ client_id: "", location_id: "", name: "", service: "", description: "", status: "lead", start_date: "", due_date: "" })
       setShowProjectForm(false)
     }
     setSavingProject(false)
+  }
+
+  const createLocation = async (event) => {
+    event.preventDefault()
+    if (!["admin", "manager", "supervisor"].includes(profile?.role)) return
+    if (locationForm.kind === "client_site" && !locationForm.client_id) {
+      setError("Selecciona el cliente al que pertenece la ubicación.")
+      return
+    }
+
+    setSavingLocation(true)
+    setError("")
+    const { data, error: insertError } = await supabase
+      .from("work_locations")
+      .insert({
+        kind: locationForm.kind,
+        client_id: locationForm.kind === "client_site" ? locationForm.client_id : null,
+        name: locationForm.name.trim(),
+        address_line: locationForm.address_line.trim() || null,
+        city: locationForm.city.trim() || null,
+        state: locationForm.state.trim() || null,
+        postal_code: locationForm.postal_code.trim() || null,
+        notes: locationForm.notes.trim() || null,
+      })
+      .select("id, client_id, name, kind, workshop_number, address_line, city, state, postal_code, notes, status, clients(legal_name)")
+      .single()
+
+    if (insertError) {
+      setError("No fue posible guardar la ubicación. Revisa los datos e inténtalo nuevamente.")
+    } else {
+      setLocations((current) => [...current, data])
+      setLocationForm({ kind: "client_site", client_id: "", name: "", address_line: "", city: "", state: "Tamaulipas", postal_code: "", notes: "" })
+      setShowLocationForm(false)
+    }
+    setSavingLocation(false)
   }
 
   useEffect(() => {
@@ -699,6 +751,7 @@ function Dashboard({ session }) {
       <nav className="internal-module-nav" aria-label="Módulos internos">
         <button type="button" className={activeModule === "requests" ? "active" : ""} onClick={() => setActiveModule("requests")}>Solicitudes</button>
         <button type="button" className={activeModule === "clients" ? "active" : ""} onClick={() => setActiveModule("clients")}>Clientes</button>
+        <button type="button" className={activeModule === "locations" ? "active" : ""} onClick={() => setActiveModule("locations")}>Talleres y ubicaciones</button>
         {profile?.role === "admin" && <button type="button" className={activeModule === "users" ? "active" : ""} onClick={() => setActiveModule("users")}>Personal</button>}
         <button type="button" className={activeModule === "projects" ? "active" : ""} onClick={() => setActiveModule("projects")}>Proyectos</button>
       </nav>
@@ -706,9 +759,9 @@ function Dashboard({ session }) {
       <section className="internal-content">
         <div className="internal-heading-row">
           <div>
-            <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : activeModule === "projects" ? "OPERACIONES" : "ADMINISTRACIÓN"}</p>
-            <h1>{activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : activeModule === "projects" ? "Proyectos y trabajos" : "Personal"}</h1>
-            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : "Invitaciones, roles y acceso al sistema interno."}</p>
+            <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : activeModule === "locations" ? "OPERACIONES" : activeModule === "projects" ? "OPERACIONES" : "ADMINISTRACIÓN"}</p>
+            <h1>{activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : activeModule === "locations" ? "Talleres y ubicaciones" : activeModule === "projects" ? "Proyectos y trabajos" : "Personal"}</h1>
+            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "locations" ? "Talleres DOXA, instalaciones de clientes y sitios externos de trabajo." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : "Invitaciones, roles y acceso al sistema interno."}</p>
           </div>
           {activeModule === "requests" ? (
             <button type="button" className="internal-refresh" onClick={loadData} disabled={loading}>
@@ -717,6 +770,10 @@ function Dashboard({ session }) {
           ) : activeModule === "clients" && ["admin", "manager", "supervisor"].includes(profile?.role) ? (
             <button type="button" className="internal-primary-action" onClick={() => setShowClientForm(true)}>
               <Plus size={17} /> Nuevo cliente
+            </button>
+          ) : activeModule === "locations" && ["admin", "manager", "supervisor"].includes(profile?.role) ? (
+            <button type="button" className="internal-primary-action" onClick={() => setShowLocationForm(true)}>
+              <Plus size={17} /> Nueva ubicación
             </button>
           ) : activeModule === "projects" && ["admin", "manager", "supervisor", "staff"].includes(profile?.role) ? (
             <button type="button" className="internal-primary-action" onClick={() => setShowProjectForm(true)}>
@@ -732,6 +789,9 @@ function Dashboard({ session }) {
           </> : activeModule === "clients" ? <>
             <article><Users size={22} /><div><strong>{clients.length}</strong><span>Clientes registrados</span></div></article>
             <article><Building2 size={22} /><div><strong>{clients.filter((item) => item.status === "active").length}</strong><span>Activos</span></div></article>
+          </> : activeModule === "locations" ? <>
+            <article><Building2 size={22} /><div><strong>{locations.filter((item) => item.kind === "company_workshop").length}</strong><span>Talleres DOXA</span></div></article>
+            <article><ClipboardList size={22} /><div><strong>{locations.filter((item) => item.kind !== "company_workshop").length}</strong><span>Ubicaciones externas</span></div></article>
           </> : <>
             <article><ClipboardList size={22} /><div><strong>{projects.length}</strong><span>Trabajos registrados</span></div></article>
             <article><RefreshCw size={22} /><div><strong>{projects.filter((item) => item.status === "in_progress").length}</strong><span>En proceso</span></div></article>
@@ -779,15 +839,29 @@ function Dashboard({ session }) {
                 ))}</tbody>
               </table>
             </div>
+          )) : activeModule === "locations" ? (locations.length === 0 ? (
+            <div className="internal-empty">Todavía no hay talleres o ubicaciones registradas.</div>
+          ) : (
+            <div className="internal-table-wrap"><table>
+              <thead><tr><th>Nombre</th><th>Tipo</th><th>Cliente</th><th>Ubicación</th><th>Estado</th></tr></thead>
+              <tbody>{locations.map((location) => <tr key={location.id}>
+                <td><strong>{location.name}</strong></td>
+                <td>{locationTypeLabel(location)}</td>
+                <td>{location.clients?.legal_name || "DOXA / No aplica"}</td>
+                <td>{[location.address_line, location.city, location.state].filter(Boolean).join(", ") || "Por definir"}</td>
+                <td><span className={`internal-status status-${location.status}`}>{location.status === "active" ? "Activa" : location.status === "inactive" ? "Inactiva" : "Archivada"}</span></td>
+              </tr>)}</tbody>
+            </table></div>
           )) : projects.length === 0 ? (
             <div className="internal-empty">Todavía no hay proyectos o trabajos registrados.</div>
           ) : (
             <div className="internal-table-wrap"><table>
-              <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Servicio</th><th>Estado</th><th>Inicio</th></tr></thead>
+              <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Ubicación</th><th>Servicio</th><th>Estado</th><th>Inicio</th></tr></thead>
               <tbody>{projects.map((project) => <tr key={project.id} className="internal-clickable-row" onClick={() => openProject(project)}>
                 <td><strong>{project.code}</strong></td>
                 <td>{project.name}</td>
                 <td className="internal-stacked-cell"><strong>{project.clients?.legal_name || "—"}</strong><span>{project.clients?.tax_id || "Sin RFC"}</span></td>
+                <td>{project.work_locations?.name || "Por definir"}</td>
                 <td>{project.service || "—"}</td>
                 <td><span className={`internal-status status-${project.status}`}>{STATUS_LABELS[project.status] || project.status}</span></td>
                 <td>{project.start_date || "Por definir"}</td>
@@ -837,6 +911,16 @@ function Dashboard({ session }) {
                 {clients.map((client) => <option key={client.id} value={client.id}>{client.legal_name}{client.tax_id ? ` — ${client.tax_id}` : ""}</option>)}
               </select>
               {clients.length === 0 && <div className="internal-form-hint">Primero un administrador o gerente debe registrar al cliente.</div>}
+              <label htmlFor="project-location">Taller o ubicación</label>
+              <select id="project-location" value={projectForm.location_id} onChange={(event) => setProjectForm({ ...projectForm, location_id: event.target.value })}>
+                <option value="">Por definir</option>
+                <optgroup label="Talleres DOXA">
+                  {locations.filter((location) => location.kind === "company_workshop" && location.status === "active").map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                </optgroup>
+                <optgroup label="Instalaciones y sitios externos">
+                  {locations.filter((location) => location.kind !== "company_workshop" && location.status === "active").map((location) => <option key={location.id} value={location.id}>{location.name}{location.clients?.legal_name ? ` — ${location.clients.legal_name}` : ""}</option>)}
+                </optgroup>
+              </select>
               <label htmlFor="project-name">Nombre del trabajo *</label>
               <input id="project-name" value={projectForm.name} onChange={(event) => setProjectForm({ ...projectForm, name: event.target.value })} required />
               <label htmlFor="project-service">Servicio</label>
@@ -857,6 +941,44 @@ function Dashboard({ session }) {
         </div>
       )}
 
+      {showLocationForm && (
+        <div className="internal-drawer-backdrop" onClick={() => setShowLocationForm(false)}>
+          <aside className="internal-drawer" onClick={(event) => event.stopPropagation()} aria-label="Nueva ubicación">
+            <button type="button" className="internal-drawer-close" onClick={() => setShowLocationForm(false)} aria-label="Cerrar"><X size={20} /></button>
+            <p className="internal-eyebrow">OPERACIONES</p>
+            <h2>Nueva ubicación</h2>
+            <p className="internal-drawer-company">Registra instalaciones de un cliente o un sitio externo de trabajo.</p>
+            <form className="internal-form internal-client-form" onSubmit={createLocation}>
+              <label htmlFor="location-kind">Tipo *</label>
+              <select id="location-kind" value={locationForm.kind} onChange={(event) => setLocationForm({ ...locationForm, kind: event.target.value, client_id: event.target.value === "client_site" ? locationForm.client_id : "" })}>
+                <option value="client_site">Instalaciones del cliente</option>
+                <option value="external_site">Sitio externo, playa u otro</option>
+              </select>
+              {locationForm.kind === "client_site" && <>
+                <label htmlFor="location-client">Cliente *</label>
+                <select id="location-client" value={locationForm.client_id} onChange={(event) => setLocationForm({ ...locationForm, client_id: event.target.value })} required>
+                  <option value="">Selecciona un cliente</option>
+                  {clients.map((client) => <option key={client.id} value={client.id}>{client.legal_name}</option>)}
+                </select>
+              </>}
+              <label htmlFor="location-name">Nombre de la ubicación *</label>
+              <input id="location-name" placeholder={locationForm.kind === "client_site" ? "Ej. Planta Altamira" : "Ej. Playa Miramar"} value={locationForm.name} onChange={(event) => setLocationForm({ ...locationForm, name: event.target.value })} required />
+              <label htmlFor="location-address">Dirección</label>
+              <input id="location-address" value={locationForm.address_line} onChange={(event) => setLocationForm({ ...locationForm, address_line: event.target.value })} />
+              <div className="internal-form-columns">
+                <div><label htmlFor="location-city">Ciudad</label><input id="location-city" value={locationForm.city} onChange={(event) => setLocationForm({ ...locationForm, city: event.target.value })} /></div>
+                <div><label htmlFor="location-state">Estado</label><input id="location-state" value={locationForm.state} onChange={(event) => setLocationForm({ ...locationForm, state: event.target.value })} /></div>
+              </div>
+              <label htmlFor="location-postal">Código postal</label>
+              <input id="location-postal" value={locationForm.postal_code} onChange={(event) => setLocationForm({ ...locationForm, postal_code: event.target.value })} />
+              <label htmlFor="location-notes">Indicaciones o notas</label>
+              <textarea id="location-notes" rows="4" value={locationForm.notes} onChange={(event) => setLocationForm({ ...locationForm, notes: event.target.value })} />
+              <button type="submit" disabled={savingLocation}>{savingLocation ? "Guardando…" : "Guardar ubicación"}</button>
+            </form>
+          </aside>
+        </div>
+      )}
+
       {selectedProject && (
         <div className="internal-drawer-backdrop" onClick={() => setSelectedProject(null)}>
           <aside className="internal-drawer internal-project-drawer" onClick={(event) => event.stopPropagation()} aria-label="Detalle del proyecto">
@@ -868,6 +990,7 @@ function Dashboard({ session }) {
             <dl className="internal-detail-list">
               <div><dt>Servicio</dt><dd>{selectedProject.service || "Sin especificar"}</dd></div>
               <div><dt>Estado</dt><dd>{STATUS_LABELS[selectedProject.status] || selectedProject.status}</dd></div>
+              <div><dt>Ubicación</dt><dd>{selectedProject.work_locations?.name || "Por definir"}</dd></div>
               <div><dt>Inicio</dt><dd>{selectedProject.start_date || "Por definir"}</dd></div>
               <div><dt>Entrega</dt><dd>{selectedProject.due_date || "Por definir"}</dd></div>
             </dl>
