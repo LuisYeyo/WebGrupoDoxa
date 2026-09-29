@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Building2, Camera, Check, ClipboardList, Download, FileText, Lightbulb, LogOut, Mail, Pencil, Plus, RefreshCw, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
+import { Building2, Camera, Check, ClipboardList, Download, Eye, EyeOff, FileText, Lightbulb, LogOut, Mail, Pencil, Plus, RefreshCw, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -81,6 +81,19 @@ function locationTypeLabel(location) {
   if (location.kind === "company_workshop") return `Taller ${location.workshop_number}`
   if (location.kind === "client_site") return "Instalaciones del cliente"
   return "Ubicación externa"
+}
+
+function PasswordField({ id, value, onChange, autoComplete }) {
+  const [visible, setVisible] = useState(false)
+  return <div className="internal-password-field">
+    <input id={id} type={visible ? "text" : "password"} autoComplete={autoComplete}
+      value={value} onChange={onChange} minLength={8} required />
+    <button type="button" onClick={() => setVisible((current) => !current)}
+      aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+      title={visible ? "Ocultar contraseña" : "Mostrar contraseña"}>
+      {visible ? <EyeOff size={19} /> : <Eye size={19} />}
+    </button>
+  </div>
 }
 
 function Login({ onAuthenticated, authLinkInvalid = false }) {
@@ -173,9 +186,8 @@ function Login({ onAuthenticated, authLinkInvalid = false }) {
             onChange={(event) => setEmail(event.target.value)} required />
 
           <label htmlFor="internal-password">Contraseña</label>
-          <input id="internal-password" type="password" autoComplete="current-password"
-            value={password} onChange={(event) => setPassword(event.target.value)}
-            minLength={8} required />
+          <PasswordField id="internal-password" autoComplete="current-password"
+            value={password} onChange={(event) => setPassword(event.target.value)} />
 
           {error && <div className="internal-alert" role="alert">{error}</div>}
           {notice && <div className="internal-notice" role="status">{notice}</div>}
@@ -299,9 +311,8 @@ function PasswordSetup({ session, onComplete }) {
             minLength={2} maxLength={150} required />
 
           <label htmlFor="new-password">Nueva contraseña</label>
-          <input id="new-password" type="password" autoComplete="new-password"
-            value={password} onChange={(event) => setPassword(event.target.value)}
-            minLength={8} required />
+          <PasswordField id="new-password" autoComplete="new-password"
+            value={password} onChange={(event) => setPassword(event.target.value)} />
 
           <div className="password-requirements" aria-live="polite">
             <p>La contraseña debe incluir:</p>
@@ -318,9 +329,8 @@ function PasswordSetup({ session, onComplete }) {
           </div>
 
           <label htmlFor="confirm-password">Confirmar contraseña</label>
-          <input id="confirm-password" type="password" autoComplete="new-password"
-            value={confirmation} onChange={(event) => setConfirmation(event.target.value)}
-            minLength={8} required />
+          <PasswordField id="confirm-password" autoComplete="new-password"
+            value={confirmation} onChange={(event) => setConfirmation(event.target.value)} />
           {confirmation && (
             <p className={`password-match ${passwordsMatch ? "is-met" : ""}`} aria-live="polite">
               <span className="password-check" aria-hidden="true">
