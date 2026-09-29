@@ -60,6 +60,11 @@ function formatDate(value) {
   }).format(new Date(value))
 }
 
+function formatMoney(value, currency = "MXN") {
+  if (value === null || value === undefined || value === "") return "Por definir"
+  return new Intl.NumberFormat("es-MX", { style: "currency", currency }).format(Number(value))
+}
+
 function createProjectCode() {
   const date = new Date().toISOString().slice(2, 10).replaceAll("-", "")
   const random = Math.random().toString(36).slice(2, 6).toUpperCase()
@@ -494,7 +499,7 @@ function Dashboard({ session }) {
     legal_name: "", trade_name: "", tax_id: "", email: "", phone: "", notes: "",
   })
   const [projectForm, setProjectForm] = useState({
-    client_id: "", location_id: "", name: "", service: "", description: "", status: "lead", start_date: "", due_date: "",
+    client_id: "", location_id: "", name: "", service: "", description: "", amount: "", currency: "MXN", status: "lead", start_date: "", due_date: "",
   })
   const [locationForm, setLocationForm] = useState({
     kind: "client_site", client_id: "", name: "", address_line: "", city: "", state: "Tamaulipas", postal_code: "", notes: "",
@@ -711,7 +716,7 @@ function Dashboard({ session }) {
         .select("id, legal_name, trade_name, tax_id, email, phone, status, created_at")
         .order("legal_name"),
       supabase.from("projects")
-        .select("id, code, name, service, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
+        .select("id, code, name, service, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
         .order("created_at", { ascending: false }),
       supabase.from("work_locations")
         .select("id, client_id, company_name, name, kind, workshop_number, address_line, city, state, postal_code, notes, status, clients(legal_name)")
@@ -807,19 +812,21 @@ function Dashboard({ session }) {
         name: projectForm.name.trim(),
         service: projectForm.service.trim() || null,
         description: projectForm.description.trim() || null,
+        amount: projectForm.amount === "" ? null : Number(projectForm.amount),
+        currency: projectForm.currency,
         status: projectForm.status,
         start_date: projectForm.start_date || null,
         due_date: projectForm.due_date || null,
         created_by: session.user.id,
       })
-      .select("id, code, name, service, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
+      .select("id, code, name, service, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
       .single()
 
     if (insertError) {
       setError("No fue posible guardar el trabajo. Verifica el cliente y las fechas.")
     } else {
       setProjects((current) => [data, ...current])
-      setProjectForm({ client_id: "", location_id: "", name: "", service: "", description: "", status: "lead", start_date: "", due_date: "" })
+      setProjectForm({ client_id: "", location_id: "", name: "", service: "", description: "", amount: "", currency: "MXN", status: "lead", start_date: "", due_date: "" })
       setShowProjectForm(false)
     }
     setSavingProject(false)
@@ -1175,13 +1182,14 @@ function Dashboard({ session }) {
             <div className="internal-empty">Todavía no hay proyectos o trabajos registrados.</div>
           ) : (
             <div className="internal-table-wrap"><table>
-              <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Ubicación</th><th>Servicio</th><th>Estado</th><th>Inicio</th></tr></thead>
+              <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Ubicación</th><th>Servicio</th><th>Monto</th><th>Estado</th><th>Inicio</th></tr></thead>
               <tbody>{projects.map((project) => <tr key={project.id} className="internal-clickable-row" onClick={() => openProject(project)}>
                 <td><strong>{project.code}</strong></td>
                 <td>{project.name}</td>
                 <td className="internal-stacked-cell"><strong>{project.clients?.legal_name || "—"}</strong><span>{project.clients?.tax_id || "Sin RFC"}</span></td>
                 <td>{project.work_locations?.name || "Por definir"}</td>
                 <td>{project.service || "—"}</td>
+                <td><strong>{formatMoney(project.amount, project.currency)}</strong></td>
                 <td><span className={`internal-status status-${project.status}`}>{STATUS_LABELS[project.status] || project.status}</span></td>
                 <td>{project.start_date || "Por definir"}</td>
               </tr>)}</tbody>
@@ -1246,6 +1254,10 @@ function Dashboard({ session }) {
               <input id="project-service" placeholder="Ej. Fabricación de tubería" value={projectForm.service} onChange={(event) => setProjectForm({ ...projectForm, service: event.target.value })} />
               <label htmlFor="project-description">Descripción</label>
               <textarea id="project-description" rows="4" value={projectForm.description} onChange={(event) => setProjectForm({ ...projectForm, description: event.target.value })} />
+              <div className="internal-form-columns">
+                <div><label htmlFor="project-amount">Monto del trabajo</label><input id="project-amount" type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.00" value={projectForm.amount} onChange={(event) => setProjectForm({ ...projectForm, amount: event.target.value })} /></div>
+                <div><label htmlFor="project-currency">Moneda</label><select id="project-currency" value={projectForm.currency} onChange={(event) => setProjectForm({ ...projectForm, currency: event.target.value })}><option value="MXN">MXN — Pesos</option><option value="USD">USD — Dólares</option></select></div>
+              </div>
               <label htmlFor="project-status">Estado</label>
               <select id="project-status" value={projectForm.status} onChange={(event) => setProjectForm({ ...projectForm, status: event.target.value })}>
                 {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -1377,6 +1389,7 @@ function Dashboard({ session }) {
 
             <dl className="internal-detail-list">
               <div><dt>Servicio</dt><dd>{selectedProject.service || "Sin especificar"}</dd></div>
+              <div><dt>Monto</dt><dd><strong>{formatMoney(selectedProject.amount, selectedProject.currency)}</strong></dd></div>
               <div><dt>Estado</dt><dd>{STATUS_LABELS[selectedProject.status] || selectedProject.status}</dd></div>
               <div><dt>Ubicación</dt><dd>{selectedProject.work_locations?.name || "Por definir"}</dd></div>
               <div><dt>Inicio</dt><dd>{selectedProject.start_date || "Por definir"}</dd></div>
