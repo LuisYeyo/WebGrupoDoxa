@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Building2, Check, ClipboardList, LogOut, Mail, Plus, RefreshCw, ShieldCheck, Users, X } from "lucide-react"
+import { Building2, Camera, Check, ClipboardList, Lightbulb, LogOut, Mail, Plus, RefreshCw, ShieldCheck, Upload, Users, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -423,6 +423,12 @@ function Dashboard({ session }) {
   const [savingStatus, setSavingStatus] = useState(false)
   const [clients, setClients] = useState([])
   const [projects, setProjects] = useState([])
+  const [selectedProject, setSelectedProject] = useState(null)
+  const [projectLessons, setProjectLessons] = useState([])
+  const [projectPhotos, setProjectPhotos] = useState([])
+  const [loadingProject, setLoadingProject] = useState(false)
+  const [savingLesson, setSavingLesson] = useState(false)
+  const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const [activeModule, setActiveModule] = useState("requests")
   const [showClientForm, setShowClientForm] = useState(false)
   const [savingClient, setSavingClient] = useState(false)
@@ -434,6 +440,126 @@ function Dashboard({ session }) {
   const [projectForm, setProjectForm] = useState({
     client_id: "", name: "", service: "", description: "", status: "lead", start_date: "", due_date: "",
   })
+  const [lessonForm, setLessonForm] = useState({
+    category: "challenge", title: "", situation: "", lesson: "",
+  })
+
+  const canEditOperations = ["admin", "manager", "supervisor", "staff"].includes(profile?.role)
+
+  const openProject = async (project) => {
+    setSelectedProject(project)
+    setProjectLessons([])
+    setProjectPhotos([])
+    setLoadingProject(true)
+    setError("")
+
+    const [lessonResult, photoResult] = await Promise.all([
+      supabase.from("project_lessons")
+        .select("id, category, title, situation, lesson, created_at, profiles(full_name)")
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false }),
+      supabase.from("documents")
+        .select("id, file_name, storage_path, description, created_at")
+        .eq("project_id", project.id)
+        .eq("category", "work_evidence")
+        .order("created_at", { ascending: false }),
+    ])
+
+    if (lessonResult.error || photoResult.error) {
+      setError("No fue posible cargar las lecciones o fotografías del proyecto.")
+    } else {
+      setProjectLessons(lessonResult.data ?? [])
+      const photosWithUrls = await Promise.all((photoResult.data ?? []).map(async (photo) => {
+        const { data } = await supabase.storage.from("project-media").createSignedUrl(photo.storage_path, 3600)
+        return { ...photo, url: data?.signedUrl || "" }
+      }))
+      setProjectPhotos(photosWithUrls)
+    }
+    setLoadingProject(false)
+  }
+
+  const createLesson = async (event) => {
+    event.preventDefault()
+    if (!selectedProject || !canEditOperations) return
+
+    setSavingLesson(true)
+    setError("")
+    const { data, error: insertError } = await supabase
+      .from("project_lessons")
+      .insert({
+        project_id: selectedProject.id,
+        author_id: session.user.id,
+        category: lessonForm.category,
+        title: lessonForm.title.trim(),
+        situation: lessonForm.situation.trim(),
+        lesson: lessonForm.lesson.trim(),
+      })
+      .select("id, category, title, situation, lesson, created_at, profiles(full_name)")
+      .single()
+
+    if (insertError) {
+      setError("No fue posible guardar la lección aprendida.")
+    } else {
+      setProjectLessons((current) => [data, ...current])
+      setLessonForm({ category: "challenge", title: "", situation: "", lesson: "" })
+    }
+    setSavingLesson(false)
+  }
+
+  const uploadProjectPhotos = async (event) => {
+    const files = Array.from(event.target.files || [])
+    event.target.value = ""
+    if (!selectedProject || !canEditOperations || files.length === 0) return
+
+    const invalidFile = files.find((file) => !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024)
+    if (invalidFile) {
+      setError("Las fotografías deben ser JPG, PNG o WebP y pesar máximo 10 MB cada una.")
+      return
+    }
+
+    setUploadingPhotos(true)
+    setError("")
+    const uploaded = []
+
+    for (const file of files) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-")
+      const storagePath = `${selectedProject.id}/${crypto.randomUUID()}-${safeName}`
+      const { error: uploadError } = await supabase.storage
+        .from("project-media")
+        .upload(storagePath, file, { contentType: file.type, upsert: false })
+
+      if (uploadError) {
+        setError("Una o más fotografías no pudieron subirse.")
+        continue
+      }
+
+      const { data: document, error: documentError } = await supabase
+        .from("documents")
+        .insert({
+          project_id: selectedProject.id,
+          uploaded_by: session.user.id,
+          category: "work_evidence",
+          file_name: file.name,
+          storage_path: storagePath,
+          mime_type: file.type,
+          size_bytes: file.size,
+        })
+        .select("id, file_name, storage_path, description, created_at")
+        .single()
+
+      if (documentError) {
+        await supabase.storage.from("project-media").remove([storagePath])
+        setError("Una fotografía subió, pero no pudo registrarse en el proyecto.")
+        continue
+      }
+
+      const { data: signedData } = await supabase.storage.from("project-media").createSignedUrl(storagePath, 3600)
+      uploaded.push({ ...document, url: signedData?.signedUrl || "" })
+    }
+
+    setProjectPhotos((current) => [...uploaded, ...current])
+    setUploadingPhotos(false)
+  }
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -658,7 +784,7 @@ function Dashboard({ session }) {
           ) : (
             <div className="internal-table-wrap"><table>
               <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Servicio</th><th>Estado</th><th>Inicio</th></tr></thead>
-              <tbody>{projects.map((project) => <tr key={project.id}>
+              <tbody>{projects.map((project) => <tr key={project.id} className="internal-clickable-row" onClick={() => openProject(project)}>
                 <td><strong>{project.code}</strong></td>
                 <td>{project.name}</td>
                 <td className="internal-stacked-cell"><strong>{project.clients?.legal_name || "—"}</strong><span>{project.clients?.tax_id || "Sin RFC"}</span></td>
@@ -727,6 +853,77 @@ function Dashboard({ session }) {
               </div>
               <button type="submit" disabled={savingProject || clients.length === 0}>{savingProject ? "Guardando…" : "Guardar trabajo"}</button>
             </form>
+          </aside>
+        </div>
+      )}
+
+      {selectedProject && (
+        <div className="internal-drawer-backdrop" onClick={() => setSelectedProject(null)}>
+          <aside className="internal-drawer internal-project-drawer" onClick={(event) => event.stopPropagation()} aria-label="Detalle del proyecto">
+            <button type="button" className="internal-drawer-close" onClick={() => setSelectedProject(null)} aria-label="Cerrar"><X size={20} /></button>
+            <p className="internal-eyebrow">{selectedProject.code}</p>
+            <h2>{selectedProject.name}</h2>
+            <p className="internal-drawer-company">{selectedProject.clients?.legal_name || "Cliente sin nombre"}</p>
+
+            <dl className="internal-detail-list">
+              <div><dt>Servicio</dt><dd>{selectedProject.service || "Sin especificar"}</dd></div>
+              <div><dt>Estado</dt><dd>{STATUS_LABELS[selectedProject.status] || selectedProject.status}</dd></div>
+              <div><dt>Inicio</dt><dd>{selectedProject.start_date || "Por definir"}</dd></div>
+              <div><dt>Entrega</dt><dd>{selectedProject.due_date || "Por definir"}</dd></div>
+            </dl>
+
+            {loadingProject ? <div className="internal-empty">Cargando expediente…</div> : <>
+              <section className="project-detail-section">
+                <div className="project-detail-heading">
+                  <div><Camera size={20} /><h3>Fotografías del proyecto</h3></div>
+                  {canEditOperations && <label className="project-upload-button">
+                    <Upload size={16} /> {uploadingPhotos ? "Subiendo…" : "Agregar fotos"}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={uploadingPhotos} onChange={uploadProjectPhotos} />
+                  </label>}
+                </div>
+                {projectPhotos.length === 0 ? (
+                  <p className="project-section-empty">Todavía no hay fotografías.</p>
+                ) : (
+                  <div className="project-photo-grid">
+                    {projectPhotos.map((photo) => <a key={photo.id} href={photo.url} target="_blank" rel="noreferrer" title={photo.file_name}>
+                      <img src={photo.url} alt={photo.description || photo.file_name} loading="lazy" />
+                    </a>)}
+                  </div>
+                )}
+              </section>
+
+              <section className="project-detail-section">
+                <div className="project-detail-heading"><div><Lightbulb size={20} /><h3>Lecciones aprendidas</h3></div></div>
+                {projectLessons.length === 0 ? <p className="project-section-empty">Todavía no se han registrado lecciones.</p> : (
+                  <div className="project-lessons-list">{projectLessons.map((item) => <article key={item.id}>
+                    <div className="project-lesson-meta">
+                      <span className={`lesson-category lesson-${item.category}`}>{item.category === "success" ? "Funcionó bien" : item.category === "improvement" ? "Mejora" : "Reto"}</span>
+                      <span>{item.profiles?.full_name || "Personal DOXA"} · {formatDate(item.created_at)}</span>
+                    </div>
+                    <h4>{item.title}</h4>
+                    <p><strong>Qué ocurrió:</strong> {item.situation}</p>
+                    <p><strong>Aprendizaje:</strong> {item.lesson}</p>
+                  </article>)}</div>
+                )}
+
+                {canEditOperations && <form className="internal-form internal-client-form project-lesson-form" onSubmit={createLesson}>
+                  <h4>Registrar una lección</h4>
+                  <label htmlFor="lesson-category">Tipo</label>
+                  <select id="lesson-category" value={lessonForm.category} onChange={(event) => setLessonForm({ ...lessonForm, category: event.target.value })}>
+                    <option value="challenge">Reto o complicación</option>
+                    <option value="success">Algo que funcionó bien</option>
+                    <option value="improvement">Oportunidad de mejora</option>
+                  </select>
+                  <label htmlFor="lesson-title">Título *</label>
+                  <input id="lesson-title" minLength={3} maxLength={160} value={lessonForm.title} onChange={(event) => setLessonForm({ ...lessonForm, title: event.target.value })} required />
+                  <label htmlFor="lesson-situation">¿Qué ocurrió? *</label>
+                  <textarea id="lesson-situation" rows="3" minLength={3} maxLength={4000} value={lessonForm.situation} onChange={(event) => setLessonForm({ ...lessonForm, situation: event.target.value })} required />
+                  <label htmlFor="lesson-result">¿Qué aprendimos o recomendamos? *</label>
+                  <textarea id="lesson-result" rows="3" minLength={3} maxLength={4000} value={lessonForm.lesson} onChange={(event) => setLessonForm({ ...lessonForm, lesson: event.target.value })} required />
+                  <button type="submit" disabled={savingLesson}>{savingLesson ? "Guardando…" : "Guardar lección"}</button>
+                </form>}
+              </section>
+            </>}
           </aside>
         </div>
       )}
