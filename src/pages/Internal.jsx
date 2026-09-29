@@ -441,6 +441,7 @@ function Dashboard({ session }) {
   const [savingClient, setSavingClient] = useState(false)
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [showLocationForm, setShowLocationForm] = useState(false)
+  const [editingLocation, setEditingLocation] = useState(null)
   const [savingProject, setSavingProject] = useState(false)
   const [savingLocation, setSavingLocation] = useState(false)
   const [clientForm, setClientForm] = useState({
@@ -590,7 +591,7 @@ function Dashboard({ session }) {
         .select("id, code, name, service, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
         .order("created_at", { ascending: false }),
       supabase.from("work_locations")
-        .select("id, client_id, name, kind, workshop_number, address_line, city, state, postal_code, notes, status, clients(legal_name)")
+        .select("id, client_id, company_name, name, kind, workshop_number, address_line, city, state, postal_code, notes, status, clients(legal_name)")
         .order("kind").order("workshop_number").order("name"),
     ])
 
@@ -710,7 +711,7 @@ function Dashboard({ session }) {
         postal_code: locationForm.postal_code.trim() || null,
         notes: locationForm.notes.trim() || null,
       })
-      .select("id, client_id, name, kind, workshop_number, address_line, city, state, postal_code, notes, status, clients(legal_name)")
+      .select("id, client_id, company_name, name, kind, workshop_number, address_line, city, state, postal_code, notes, status, clients(legal_name)")
       .single()
 
     if (insertError) {
@@ -719,6 +720,37 @@ function Dashboard({ session }) {
       setLocations((current) => [...current, data])
       setLocationForm({ kind: "client_site", client_id: "", name: "", address_line: "", city: "", state: "Tamaulipas", postal_code: "", notes: "" })
       setShowLocationForm(false)
+    }
+    setSavingLocation(false)
+  }
+
+  const updateLocation = async (event) => {
+    event.preventDefault()
+    if (!editingLocation || !["admin", "manager", "supervisor"].includes(profile?.role)) return
+
+    setSavingLocation(true)
+    setError("")
+    const { data, error: updateError } = await supabase
+      .from("work_locations")
+      .update({
+        company_name: editingLocation.company_name?.trim() || null,
+        name: editingLocation.name.trim(),
+        address_line: editingLocation.address_line?.trim() || null,
+        city: editingLocation.city?.trim() || null,
+        state: editingLocation.state?.trim() || null,
+        postal_code: editingLocation.postal_code?.trim() || null,
+        notes: editingLocation.notes?.trim() || null,
+        status: editingLocation.status,
+      })
+      .eq("id", editingLocation.id)
+      .select("id, client_id, company_name, name, kind, workshop_number, address_line, city, state, postal_code, notes, status, clients(legal_name)")
+      .single()
+
+    if (updateError) {
+      setError("No fue posible actualizar el taller o ubicación.")
+    } else {
+      setLocations((current) => current.map((location) => location.id === data.id ? data : location))
+      setEditingLocation(null)
     }
     setSavingLocation(false)
   }
@@ -843,11 +875,11 @@ function Dashboard({ session }) {
             <div className="internal-empty">Todavía no hay talleres o ubicaciones registradas.</div>
           ) : (
             <div className="internal-table-wrap"><table>
-              <thead><tr><th>Nombre</th><th>Tipo</th><th>Cliente</th><th>Ubicación</th><th>Estado</th></tr></thead>
-              <tbody>{locations.map((location) => <tr key={location.id}>
+              <thead><tr><th>Nombre</th><th>Tipo</th><th>Empresa relacionada</th><th>Ubicación</th><th>Estado</th></tr></thead>
+              <tbody>{locations.map((location) => <tr key={location.id} className={["admin", "manager", "supervisor"].includes(profile?.role) ? "internal-clickable-row" : ""} onClick={() => ["admin", "manager", "supervisor"].includes(profile?.role) && setEditingLocation({ ...location })}>
                 <td><strong>{location.name}</strong></td>
                 <td>{locationTypeLabel(location)}</td>
-                <td>{location.clients?.legal_name || "DOXA / No aplica"}</td>
+                <td>{location.kind === "company_workshop" ? (location.company_name || "Empresa por asignar") : location.kind === "client_site" ? (location.clients?.legal_name || "Cliente por asignar") : "Sitio externo"}</td>
                 <td>{[location.address_line, location.city, location.state].filter(Boolean).join(", ") || "Por definir"}</td>
                 <td><span className={`internal-status status-${location.status}`}>{location.status === "active" ? "Activa" : location.status === "inactive" ? "Inactiva" : "Archivada"}</span></td>
               </tr>)}</tbody>
@@ -974,6 +1006,40 @@ function Dashboard({ session }) {
               <label htmlFor="location-notes">Indicaciones o notas</label>
               <textarea id="location-notes" rows="4" value={locationForm.notes} onChange={(event) => setLocationForm({ ...locationForm, notes: event.target.value })} />
               <button type="submit" disabled={savingLocation}>{savingLocation ? "Guardando…" : "Guardar ubicación"}</button>
+            </form>
+          </aside>
+        </div>
+      )}
+
+      {editingLocation && (
+        <div className="internal-drawer-backdrop" onClick={() => setEditingLocation(null)}>
+          <aside className="internal-drawer" onClick={(event) => event.stopPropagation()} aria-label="Editar taller o ubicación">
+            <button type="button" className="internal-drawer-close" onClick={() => setEditingLocation(null)} aria-label="Cerrar"><X size={20} /></button>
+            <p className="internal-eyebrow">{locationTypeLabel(editingLocation).toUpperCase()}</p>
+            <h2>Editar ubicación</h2>
+            <p className="internal-drawer-company">Actualiza la empresa responsable y los datos del sitio.</p>
+            <form className="internal-form internal-client-form" onSubmit={updateLocation}>
+              {editingLocation.kind === "company_workshop" && <>
+                <label htmlFor="edit-location-company">Empresa responsable *</label>
+                <input id="edit-location-company" value={editingLocation.company_name || ""} onChange={(event) => setEditingLocation({ ...editingLocation, company_name: event.target.value })} minLength={2} maxLength={150} required />
+              </>}
+              <label htmlFor="edit-location-name">Nombre de la ubicación *</label>
+              <input id="edit-location-name" value={editingLocation.name} onChange={(event) => setEditingLocation({ ...editingLocation, name: event.target.value })} required />
+              <label htmlFor="edit-location-address">Dirección</label>
+              <input id="edit-location-address" value={editingLocation.address_line || ""} onChange={(event) => setEditingLocation({ ...editingLocation, address_line: event.target.value })} />
+              <div className="internal-form-columns">
+                <div><label htmlFor="edit-location-city">Ciudad</label><input id="edit-location-city" value={editingLocation.city || ""} onChange={(event) => setEditingLocation({ ...editingLocation, city: event.target.value })} /></div>
+                <div><label htmlFor="edit-location-state">Estado</label><input id="edit-location-state" value={editingLocation.state || ""} onChange={(event) => setEditingLocation({ ...editingLocation, state: event.target.value })} /></div>
+              </div>
+              <label htmlFor="edit-location-postal">Código postal</label>
+              <input id="edit-location-postal" value={editingLocation.postal_code || ""} onChange={(event) => setEditingLocation({ ...editingLocation, postal_code: event.target.value })} />
+              <label htmlFor="edit-location-status">Estado del registro</label>
+              <select id="edit-location-status" value={editingLocation.status} onChange={(event) => setEditingLocation({ ...editingLocation, status: event.target.value })}>
+                <option value="active">Activa</option><option value="inactive">Inactiva</option><option value="archived">Archivada</option>
+              </select>
+              <label htmlFor="edit-location-notes">Indicaciones o notas</label>
+              <textarea id="edit-location-notes" rows="4" value={editingLocation.notes || ""} onChange={(event) => setEditingLocation({ ...editingLocation, notes: event.target.value })} />
+              <button type="submit" disabled={savingLocation}>{savingLocation ? "Guardando…" : "Guardar cambios"}</button>
             </form>
           </aside>
         </div>
