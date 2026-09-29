@@ -492,6 +492,7 @@ function Dashboard({ session }) {
   const [equipment, setEquipment] = useState([])
   const [projectEquipment, setProjectEquipment] = useState([])
   const [workOrders, setWorkOrders] = useState([])
+  const [editingWorkOrder, setEditingWorkOrder] = useState(null)
   const [team, setTeam] = useState([])
   const [selectedProject, setSelectedProject] = useState(null)
   const [editingProject, setEditingProject] = useState(false)
@@ -1142,6 +1143,34 @@ function Dashboard({ session }) {
     setWorkOrders((current) => current.map((item) => item.id === order.id ? { ...item, status, completed_at: status === "completed" ? (item.completed_at || new Date().toISOString()) : null } : item))
   }
 
+  const updateWorkOrder = async (event) => {
+    event.preventDefault()
+    if (!editingWorkOrder || !canEditOperations) return
+
+    setSavingWorkOrder(true)
+    setError("")
+    const completedAt = editingWorkOrder.status === "completed" ? (editingWorkOrder.completed_at || new Date().toISOString()) : null
+    const { data, error: updateError } = await supabase.from("work_orders").update({
+      assigned_to: editingWorkOrder.assigned_to || null,
+      title: editingWorkOrder.title.trim(),
+      description: editingWorkOrder.description?.trim() || null,
+      status: editingWorkOrder.status,
+      scheduled_date: editingWorkOrder.scheduled_date || null,
+      due_date: editingWorkOrder.due_date || null,
+      completed_at: completedAt,
+    }).eq("id", editingWorkOrder.id)
+      .select("id, project_id, assigned_to, code, title, description, status, scheduled_date, due_date, completed_at, created_at, projects(id, code, name), profiles!work_orders_assigned_to_fkey(id, full_name)")
+      .single()
+
+    if (updateError) {
+      setError("No fue posible actualizar la orden de trabajo. Revisa los datos y las fechas.")
+    } else {
+      setWorkOrders((current) => current.map((order) => order.id === data.id ? data : order))
+      setEditingWorkOrder(null)
+    }
+    setSavingWorkOrder(false)
+  }
+
   useEffect(() => {
     const timeout = window.setTimeout(loadData, 0)
     return () => window.clearTimeout(timeout)
@@ -1327,12 +1356,12 @@ function Dashboard({ session }) {
           ) : (
             <div className="internal-table-wrap"><table>
               <thead><tr><th>Folio</th><th>Orden</th><th>Proyecto</th><th>Responsable</th><th>Estado</th><th>Programada</th><th>Entrega</th></tr></thead>
-              <tbody>{workOrders.map((order) => <tr key={order.id}>
+              <tbody>{workOrders.map((order) => <tr key={order.id} className={canEditOperations ? "internal-clickable-row" : ""} onClick={() => canEditOperations && setEditingWorkOrder({ ...order })}>
                 <td><strong>{order.code}</strong></td>
                 <td className="internal-stacked-cell"><strong>{order.title}</strong><span>{order.description || "Sin descripción"}</span></td>
                 <td className="internal-stacked-cell"><strong>{order.projects?.name || "Proyecto no disponible"}</strong><span>{order.projects?.code || "—"}</span></td>
                 <td>{order.profiles?.full_name || "Sin asignar"}</td>
-                <td><select className="work-order-status-select" value={order.status} onChange={(event) => updateWorkOrderStatus(order, event.target.value)} disabled={!canEditOperations || savingWorkOrder}>{Object.entries(WORK_ORDER_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></td>
+                <td><select className="work-order-status-select" value={order.status} onClick={(event) => event.stopPropagation()} onChange={(event) => updateWorkOrderStatus(order, event.target.value)} disabled={!canEditOperations || savingWorkOrder}>{Object.entries(WORK_ORDER_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></td>
                 <td>{order.scheduled_date || "Por definir"}</td>
                 <td>{order.due_date || "Por definir"}</td>
               </tr>)}</tbody>
@@ -1597,6 +1626,32 @@ function Dashboard({ session }) {
               <label htmlFor="edit-equipment-notes">Capacidad, uso o notas</label>
               <textarea id="edit-equipment-notes" rows="4" value={editingEquipment.notes || ""} onChange={(event) => setEditingEquipment({ ...editingEquipment, notes: event.target.value })} />
               <button type="submit" disabled={savingEquipment}>{savingEquipment ? "Guardando…" : "Guardar cambios"}</button>
+            </form>
+          </aside>
+        </div>
+      )}
+
+      {editingWorkOrder && (
+        <div className="internal-drawer-backdrop" onClick={() => setEditingWorkOrder(null)}>
+          <aside className="internal-drawer" onClick={(event) => event.stopPropagation()} aria-label="Editar orden de trabajo">
+            <button type="button" className="internal-drawer-close" onClick={() => setEditingWorkOrder(null)} aria-label="Cerrar"><X size={20} /></button>
+            <p className="internal-eyebrow">{editingWorkOrder.code}</p>
+            <h2>Editar orden</h2>
+            <p className="internal-drawer-company">{editingWorkOrder.projects?.name || "Proyecto"}</p>
+            <form className="internal-form internal-client-form" onSubmit={updateWorkOrder}>
+              <label htmlFor="edit-order-title">Actividad *</label>
+              <input id="edit-order-title" minLength={3} maxLength={160} value={editingWorkOrder.title} onChange={(event) => setEditingWorkOrder({ ...editingWorkOrder, title: event.target.value })} required />
+              <label htmlFor="edit-order-assignee">Responsable</label>
+              <select id="edit-order-assignee" value={editingWorkOrder.assigned_to || ""} onChange={(event) => setEditingWorkOrder({ ...editingWorkOrder, assigned_to: event.target.value })}><option value="">Sin asignar</option>{team.map((member) => <option key={member.id} value={member.id}>{member.full_name} — {ROLE_LABELS[member.role] || member.role}</option>)}</select>
+              <label htmlFor="edit-order-description">Instrucciones o alcance</label>
+              <textarea id="edit-order-description" rows="4" maxLength={4000} value={editingWorkOrder.description || ""} onChange={(event) => setEditingWorkOrder({ ...editingWorkOrder, description: event.target.value })} />
+              <label htmlFor="edit-order-status">Estado</label>
+              <select id="edit-order-status" value={editingWorkOrder.status} onChange={(event) => setEditingWorkOrder({ ...editingWorkOrder, status: event.target.value })}>{Object.entries(WORK_ORDER_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+              <div className="internal-form-columns">
+                <div><label htmlFor="edit-order-scheduled">Programada</label><input id="edit-order-scheduled" type="date" value={editingWorkOrder.scheduled_date || ""} onChange={(event) => setEditingWorkOrder({ ...editingWorkOrder, scheduled_date: event.target.value })} /></div>
+                <div><label htmlFor="edit-order-due">Entrega</label><input id="edit-order-due" type="date" min={editingWorkOrder.scheduled_date || undefined} value={editingWorkOrder.due_date || ""} onChange={(event) => setEditingWorkOrder({ ...editingWorkOrder, due_date: event.target.value })} /></div>
+              </div>
+              <button type="submit" disabled={savingWorkOrder}>{savingWorkOrder ? "Guardando…" : "Guardar cambios"}</button>
             </form>
           </aside>
         </div>
