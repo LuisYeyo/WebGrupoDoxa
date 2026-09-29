@@ -32,6 +32,12 @@ const EQUIPMENT_CATEGORY_LABELS = {
   other: "Otro",
 }
 
+const EQUIPMENT_STATUS_LABELS = {
+  active: "Activo",
+  inactive: "Inactivo",
+  archived: "Archivado",
+}
+
 const WORK_ORDER_STATUS_LABELS = {
   pending: "Pendiente",
   scheduled: "Programada",
@@ -501,6 +507,7 @@ function Dashboard({ session }) {
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [showLocationForm, setShowLocationForm] = useState(false)
   const [showEquipmentForm, setShowEquipmentForm] = useState(false)
+  const [editingEquipment, setEditingEquipment] = useState(null)
   const [editingLocation, setEditingLocation] = useState(null)
   const [savingProject, setSavingProject] = useState(false)
   const [savingLocation, setSavingLocation] = useState(false)
@@ -1011,6 +1018,37 @@ function Dashboard({ session }) {
     setSavingEquipment(false)
   }
 
+  const updateEquipment = async (event) => {
+    event.preventDefault()
+    if (!editingEquipment || !["admin", "manager", "supervisor"].includes(profile?.role)) return
+
+    setSavingEquipment(true)
+    setError("")
+    const { data, error: updateError } = await supabase.from("equipment").update({
+      internal_code: editingEquipment.internal_code.trim().toUpperCase(),
+      name: editingEquipment.name.trim(),
+      category: editingEquipment.category,
+      brand: editingEquipment.brand?.trim() || null,
+      model: editingEquipment.model?.trim() || null,
+      serial_number: editingEquipment.serial_number?.trim() || null,
+      location_id: editingEquipment.location_id || null,
+      status: editingEquipment.status,
+      last_maintenance_date: editingEquipment.last_maintenance_date || null,
+      next_maintenance_date: editingEquipment.next_maintenance_date || null,
+      notes: editingEquipment.notes?.trim() || null,
+    }).eq("id", editingEquipment.id)
+      .select("id, location_id, internal_code, name, category, brand, model, serial_number, status, last_maintenance_date, next_maintenance_date, notes, work_locations(name)")
+      .single()
+
+    if (updateError) {
+      setError("No fue posible actualizar el equipo. Revisa el código interno y las fechas.")
+    } else {
+      setEquipment((current) => current.map((item) => item.id === data.id ? data : item).sort((a, b) => a.internal_code.localeCompare(b.internal_code)))
+      setEditingEquipment(null)
+    }
+    setSavingEquipment(false)
+  }
+
   const assignEquipment = async (event) => {
     event.preventDefault()
     if (!selectedProject || !canEditOperations || !assignmentForm.equipment_id) return
@@ -1236,13 +1274,13 @@ function Dashboard({ session }) {
           ) : (
             <div className="internal-table-wrap"><table>
               <thead><tr><th>Código</th><th>Equipo</th><th>Categoría</th><th>Marca / modelo</th><th>Ubicación</th><th>Estado</th></tr></thead>
-              <tbody>{equipment.map((item) => <tr key={item.id}>
+              <tbody>{equipment.map((item) => <tr key={item.id} className={["admin", "manager", "supervisor"].includes(profile?.role) ? "internal-clickable-row" : ""} onClick={() => ["admin", "manager", "supervisor"].includes(profile?.role) && setEditingEquipment({ ...item })}>
                 <td><strong>{item.internal_code}</strong></td>
                 <td>{item.name}</td>
                 <td>{EQUIPMENT_CATEGORY_LABELS[item.category] || item.category || "Sin categoría"}</td>
                 <td>{[item.brand, item.model].filter(Boolean).join(" · ") || "—"}</td>
                 <td>{item.work_locations?.name || "Sin asignar"}</td>
-                <td><span className={`internal-status status-${item.status}`}>{item.status === "active" ? "Activo" : item.status === "inactive" ? "Inactivo" : "Archivado"}</span></td>
+                <td><span className={`internal-status status-${item.status}`}>{EQUIPMENT_STATUS_LABELS[item.status] || item.status}</span></td>
               </tr>)}</tbody>
             </table></div>
           )) : activeModule === "workOrders" ? (workOrders.length === 0 ? (
@@ -1484,6 +1522,42 @@ function Dashboard({ session }) {
               <label htmlFor="equipment-notes">Capacidad, uso o notas</label>
               <textarea id="equipment-notes" rows="4" value={equipmentForm.notes} onChange={(event) => setEquipmentForm({ ...equipmentForm, notes: event.target.value })} />
               <button type="submit" disabled={savingEquipment}>{savingEquipment ? "Guardando…" : "Guardar equipo"}</button>
+            </form>
+          </aside>
+        </div>
+      )}
+
+      {editingEquipment && (
+        <div className="internal-drawer-backdrop" onClick={() => setEditingEquipment(null)}>
+          <aside className="internal-drawer" onClick={(event) => event.stopPropagation()} aria-label="Editar equipo">
+            <button type="button" className="internal-drawer-close" onClick={() => setEditingEquipment(null)} aria-label="Cerrar"><X size={20} /></button>
+            <p className="internal-eyebrow">INVENTARIO</p>
+            <h2>Editar equipo</h2>
+            <p className="internal-drawer-company">Actualiza su identificación, ubicación y mantenimiento.</p>
+            <form className="internal-form internal-client-form" onSubmit={updateEquipment}>
+              <label htmlFor="edit-equipment-code">Código interno *</label>
+              <input id="edit-equipment-code" value={editingEquipment.internal_code} onChange={(event) => setEditingEquipment({ ...editingEquipment, internal_code: event.target.value.toUpperCase() })} required />
+              <label htmlFor="edit-equipment-name">Nombre del equipo *</label>
+              <input id="edit-equipment-name" value={editingEquipment.name} onChange={(event) => setEditingEquipment({ ...editingEquipment, name: event.target.value })} required />
+              <label htmlFor="edit-equipment-category">Categoría</label>
+              <select id="edit-equipment-category" value={editingEquipment.category || "other"} onChange={(event) => setEditingEquipment({ ...editingEquipment, category: event.target.value })}>{Object.entries(EQUIPMENT_CATEGORY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+              <div className="internal-form-columns">
+                <div><label htmlFor="edit-equipment-brand">Marca</label><input id="edit-equipment-brand" value={editingEquipment.brand || ""} onChange={(event) => setEditingEquipment({ ...editingEquipment, brand: event.target.value })} /></div>
+                <div><label htmlFor="edit-equipment-model">Modelo</label><input id="edit-equipment-model" value={editingEquipment.model || ""} onChange={(event) => setEditingEquipment({ ...editingEquipment, model: event.target.value })} /></div>
+              </div>
+              <label htmlFor="edit-equipment-serial">Número de serie</label>
+              <input id="edit-equipment-serial" value={editingEquipment.serial_number || ""} onChange={(event) => setEditingEquipment({ ...editingEquipment, serial_number: event.target.value })} />
+              <label htmlFor="edit-equipment-location">Ubicación actual</label>
+              <select id="edit-equipment-location" value={editingEquipment.location_id || ""} onChange={(event) => setEditingEquipment({ ...editingEquipment, location_id: event.target.value })}><option value="">Sin asignar</option>{locations.filter((location) => location.status === "active").map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select>
+              <label htmlFor="edit-equipment-status">Estado</label>
+              <select id="edit-equipment-status" value={editingEquipment.status} onChange={(event) => setEditingEquipment({ ...editingEquipment, status: event.target.value })}><option value="active">Activo</option><option value="inactive">Inactivo</option><option value="archived">Archivado</option></select>
+              <div className="internal-form-columns">
+                <div><label htmlFor="edit-equipment-last-maintenance">Último mantenimiento</label><input id="edit-equipment-last-maintenance" type="date" value={editingEquipment.last_maintenance_date || ""} onChange={(event) => setEditingEquipment({ ...editingEquipment, last_maintenance_date: event.target.value })} /></div>
+                <div><label htmlFor="edit-equipment-next-maintenance">Próximo mantenimiento</label><input id="edit-equipment-next-maintenance" type="date" value={editingEquipment.next_maintenance_date || ""} onChange={(event) => setEditingEquipment({ ...editingEquipment, next_maintenance_date: event.target.value })} /></div>
+              </div>
+              <label htmlFor="edit-equipment-notes">Capacidad, uso o notas</label>
+              <textarea id="edit-equipment-notes" rows="4" value={editingEquipment.notes || ""} onChange={(event) => setEditingEquipment({ ...editingEquipment, notes: event.target.value })} />
+              <button type="submit" disabled={savingEquipment}>{savingEquipment ? "Guardando…" : "Guardar cambios"}</button>
             </form>
           </aside>
         </div>
