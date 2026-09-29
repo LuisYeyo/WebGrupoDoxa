@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Building2, Camera, Check, ClipboardList, Lightbulb, LogOut, Mail, Plus, RefreshCw, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
+import { Building2, Camera, Check, ClipboardList, Download, FileText, Lightbulb, LogOut, Mail, Plus, RefreshCw, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -39,6 +39,17 @@ const WORK_ORDER_STATUS_LABELS = {
   blocked: "Bloqueada",
   completed: "Terminada",
   cancelled: "Cancelada",
+}
+
+const DOCUMENT_CATEGORY_LABELS = {
+  quote: "Cotización",
+  contract: "Contrato",
+  purchase_order: "Orden de compra",
+  drawing: "Plano o dibujo",
+  inspection_report: "Reporte de inspección",
+  safety: "Seguridad",
+  invoice: "Factura",
+  other: "Otro",
 }
 
 function formatDate(value) {
@@ -462,9 +473,11 @@ function Dashboard({ session }) {
   const [selectedProject, setSelectedProject] = useState(null)
   const [projectLessons, setProjectLessons] = useState([])
   const [projectPhotos, setProjectPhotos] = useState([])
+  const [projectDocuments, setProjectDocuments] = useState([])
   const [loadingProject, setLoadingProject] = useState(false)
   const [savingLesson, setSavingLesson] = useState(false)
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
+  const [uploadingDocument, setUploadingDocument] = useState(false)
   const [activeModule, setActiveModule] = useState("requests")
   const [showClientForm, setShowClientForm] = useState(false)
   const [savingClient, setSavingClient] = useState(false)
@@ -495,6 +508,7 @@ function Dashboard({ session }) {
   const [workOrderForm, setWorkOrderForm] = useState({
     assigned_to: "", title: "", description: "", status: "pending", scheduled_date: "", due_date: "",
   })
+  const [documentForm, setDocumentForm] = useState({ category: "other", description: "", file: null })
   const [lessonForm, setLessonForm] = useState({
     category: "challenge", title: "", situation: "", lesson: "",
   })
@@ -505,11 +519,12 @@ function Dashboard({ session }) {
     setSelectedProject(project)
     setProjectLessons([])
     setProjectPhotos([])
+    setProjectDocuments([])
     setProjectEquipment([])
     setLoadingProject(true)
     setError("")
 
-    const [lessonResult, photoResult, equipmentResult] = await Promise.all([
+    const [lessonResult, photoResult, documentResult, equipmentResult] = await Promise.all([
       supabase.from("project_lessons")
         .select("id, category, title, situation, lesson, created_at, profiles(full_name)")
         .eq("project_id", project.id)
@@ -519,13 +534,18 @@ function Dashboard({ session }) {
         .eq("project_id", project.id)
         .eq("category", "work_evidence")
         .order("created_at", { ascending: false }),
+      supabase.from("documents")
+        .select("id, category, file_name, storage_path, description, mime_type, size_bytes, created_at, profiles!documents_uploaded_by_fkey(full_name)")
+        .eq("project_id", project.id)
+        .neq("category", "work_evidence")
+        .order("created_at", { ascending: false }),
       supabase.from("project_equipment")
         .select("equipment_id, purpose, planned_from, planned_until, notes, equipment(id, internal_code, name, brand, model)")
         .eq("project_id", project.id)
         .order("created_at", { ascending: false }),
     ])
 
-    if (lessonResult.error || photoResult.error || equipmentResult.error) {
+    if (lessonResult.error || photoResult.error || documentResult.error || equipmentResult.error) {
       setError("No fue posible cargar el expediente completo del proyecto.")
     } else {
       setProjectLessons(lessonResult.data ?? [])
@@ -534,6 +554,7 @@ function Dashboard({ session }) {
         return { ...photo, url: data?.signedUrl || "" }
       }))
       setProjectPhotos(photosWithUrls)
+      setProjectDocuments(documentResult.data ?? [])
       setProjectEquipment(equipmentResult.data ?? [])
     }
     setLoadingProject(false)
@@ -620,6 +641,60 @@ function Dashboard({ session }) {
 
     setProjectPhotos((current) => [...uploaded, ...current])
     setUploadingPhotos(false)
+  }
+
+  const uploadProjectDocument = async (event) => {
+    event.preventDefault()
+    const form = event.currentTarget
+    const file = documentForm.file
+    if (!selectedProject || !canEditOperations || !file) return
+    if (file.size > 10 * 1024 * 1024) {
+      setError("El documento debe pesar máximo 10 MB.")
+      return
+    }
+
+    setUploadingDocument(true)
+    setError("")
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-")
+    const storagePath = `${selectedProject.id}/documents/${crypto.randomUUID()}-${safeName}`
+    const { error: uploadError } = await supabase.storage.from("project-media").upload(storagePath, file, { contentType: file.type || "application/octet-stream", upsert: false })
+
+    if (uploadError) {
+      setError("No fue posible subir el documento. Verifica que ya ejecutaste el SQL del módulo de documentos.")
+      setUploadingDocument(false)
+      return
+    }
+
+    const { data, error: insertError } = await supabase.from("documents").insert({
+      project_id: selectedProject.id,
+      uploaded_by: session.user.id,
+      category: documentForm.category,
+      description: documentForm.description.trim() || null,
+      file_name: file.name,
+      storage_path: storagePath,
+      mime_type: file.type || null,
+      size_bytes: file.size,
+    }).select("id, category, file_name, storage_path, description, mime_type, size_bytes, created_at, profiles!documents_uploaded_by_fkey(full_name)").single()
+
+    if (insertError) {
+      await supabase.storage.from("project-media").remove([storagePath])
+      setError("El archivo subió, pero no pudo registrarse en el proyecto.")
+    } else {
+      setProjectDocuments((current) => [data, ...current])
+      setDocumentForm({ category: "other", description: "", file: null })
+      form.reset()
+    }
+    setUploadingDocument(false)
+  }
+
+  const downloadProjectDocument = async (document) => {
+    setError("")
+    const { data, error: signedUrlError } = await supabase.storage.from("project-media").createSignedUrl(document.storage_path, 60, { download: document.file_name })
+    if (signedUrlError || !data?.signedUrl) {
+      setError("No fue posible preparar la descarga del documento.")
+      return
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer")
   }
 
   const loadData = useCallback(async () => {
@@ -1361,6 +1436,28 @@ function Dashboard({ session }) {
                   <label htmlFor="assignment-notes">Notas</label>
                   <textarea id="assignment-notes" rows="2" value={assignmentForm.notes} onChange={(event) => setAssignmentForm({ ...assignmentForm, notes: event.target.value })} />
                   <button type="submit" disabled={assigningEquipment || !assignmentForm.equipment_id}>{assigningEquipment ? "Asignando…" : "Asignar equipo"}</button>
+                </form>}
+              </section>
+
+              <section className="project-detail-section">
+                <div className="project-detail-heading"><div><FileText size={20} /><h3>Documentos del proyecto</h3></div></div>
+                {projectDocuments.length === 0 ? <p className="project-section-empty">Todavía no hay documentos guardados.</p> : (
+                  <div className="project-document-list">{projectDocuments.map((document) => <article key={document.id}>
+                    <div className="project-document-icon"><FileText size={20} /></div>
+                    <div><strong>{document.file_name}</strong><span>{DOCUMENT_CATEGORY_LABELS[document.category] || "Otro"} · {document.profiles?.full_name || "Personal DOXA"} · {formatDate(document.created_at)}</span>{document.description && <p>{document.description}</p>}</div>
+                    <button type="button" onClick={() => downloadProjectDocument(document)} title={`Descargar ${document.file_name}`}><Download size={17} /> Descargar</button>
+                  </article>)}</div>
+                )}
+                {canEditOperations && <form className="internal-form internal-client-form project-lesson-form" onSubmit={uploadProjectDocument}>
+                  <h4>Agregar documento</h4>
+                  <label htmlFor="document-category">Tipo de documento</label>
+                  <select id="document-category" value={documentForm.category} onChange={(event) => setDocumentForm({ ...documentForm, category: event.target.value })}>{Object.entries(DOCUMENT_CATEGORY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+                  <label htmlFor="document-file">Archivo *</label>
+                  <input id="document-file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,image/jpeg,image/png,image/webp" onChange={(event) => setDocumentForm({ ...documentForm, file: event.target.files?.[0] || null })} required />
+                  <p className="internal-form-file-hint">PDF, Word, Excel, CSV, texto o imagen. Máximo 10 MB.</p>
+                  <label htmlFor="document-description">Descripción</label>
+                  <textarea id="document-description" rows="2" maxLength={500} value={documentForm.description} onChange={(event) => setDocumentForm({ ...documentForm, description: event.target.value })} placeholder="Ej. Plano aprobado para fabricación" />
+                  <button type="submit" disabled={uploadingDocument || !documentForm.file}>{uploadingDocument ? "Subiendo…" : "Guardar documento"}</button>
                 </form>}
               </section>
 
