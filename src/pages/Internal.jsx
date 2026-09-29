@@ -496,6 +496,7 @@ function Dashboard({ session }) {
   const [uploadingDocument, setUploadingDocument] = useState(false)
   const [activeModule, setActiveModule] = useState("requests")
   const [showClientForm, setShowClientForm] = useState(false)
+  const [editingClient, setEditingClient] = useState(null)
   const [savingClient, setSavingClient] = useState(false)
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [showLocationForm, setShowLocationForm] = useState(false)
@@ -737,7 +738,7 @@ function Dashboard({ session }) {
         .select("id, request_code, requester_name, company_name, email, phone, service, message, status, received_at")
         .order("received_at", { ascending: false }).limit(100),
       supabase.from("clients")
-        .select("id, legal_name, trade_name, tax_id, email, phone, status, created_at")
+        .select("id, legal_name, trade_name, tax_id, email, phone, notes, status, created_at")
         .order("legal_name"),
       supabase.from("projects")
         .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
@@ -808,7 +809,7 @@ function Dashboard({ session }) {
     const { data, error: insertError } = await supabase
       .from("clients")
       .insert({ ...payload, created_by: session.user.id })
-      .select("id, legal_name, trade_name, tax_id, email, phone, status, created_at")
+      .select("id, legal_name, trade_name, tax_id, email, phone, notes, status, created_at")
       .single()
 
     if (insertError) {
@@ -817,6 +818,33 @@ function Dashboard({ session }) {
       setClients((current) => [...current, data].sort((a, b) => a.legal_name.localeCompare(b.legal_name)))
       setClientForm({ legal_name: "", trade_name: "", tax_id: "", email: "", phone: "", notes: "" })
       setShowClientForm(false)
+    }
+    setSavingClient(false)
+  }
+
+  const updateClient = async (event) => {
+    event.preventDefault()
+    if (!editingClient || !["admin", "manager", "supervisor"].includes(profile?.role)) return
+
+    setSavingClient(true)
+    setError("")
+    const { data, error: updateError } = await supabase.from("clients").update({
+      legal_name: editingClient.legal_name.trim(),
+      trade_name: editingClient.trade_name?.trim() || null,
+      tax_id: editingClient.tax_id?.trim().toUpperCase() || null,
+      email: editingClient.email?.trim() || null,
+      phone: editingClient.phone?.trim() || null,
+      notes: editingClient.notes?.trim() || null,
+      status: editingClient.status,
+    }).eq("id", editingClient.id)
+      .select("id, legal_name, trade_name, tax_id, email, phone, notes, status, created_at")
+      .single()
+
+    if (updateError) {
+      setError("No fue posible actualizar el cliente. Revisa que el RFC no esté repetido.")
+    } else {
+      setClients((current) => current.map((client) => client.id === data.id ? data : client).sort((a, b) => a.legal_name.localeCompare(b.legal_name)))
+      setEditingClient(null)
     }
     setSavingClient(false)
   }
@@ -1180,7 +1208,7 @@ function Dashboard({ session }) {
               <table>
                 <thead><tr><th>Razón social</th><th>Nombre comercial</th><th>RFC</th><th>Contacto</th><th>Estado</th></tr></thead>
                 <tbody>{clients.map((client) => (
-                  <tr key={client.id}>
+                  <tr key={client.id} className={["admin", "manager", "supervisor"].includes(profile?.role) ? "internal-clickable-row" : ""} onClick={() => ["admin", "manager", "supervisor"].includes(profile?.role) && setEditingClient({ ...client })}>
                     <td><strong>{client.legal_name}</strong></td>
                     <td>{client.trade_name || "—"}</td>
                     <td>{client.tax_id || "—"}</td>
@@ -1273,6 +1301,34 @@ function Dashboard({ session }) {
               <label htmlFor="client-notes">Notas</label>
               <textarea id="client-notes" rows="4" value={clientForm.notes} onChange={(event) => setClientForm({ ...clientForm, notes: event.target.value })} />
               <button type="submit" disabled={savingClient}>{savingClient ? "Guardando…" : "Guardar cliente"}</button>
+            </form>
+          </aside>
+        </div>
+      )}
+
+      {editingClient && (
+        <div className="internal-drawer-backdrop" onClick={() => setEditingClient(null)}>
+          <aside className="internal-drawer" onClick={(event) => event.stopPropagation()} aria-label="Editar cliente">
+            <button type="button" className="internal-drawer-close" onClick={() => setEditingClient(null)} aria-label="Cerrar"><X size={20} /></button>
+            <p className="internal-eyebrow">DIRECTORIO</p>
+            <h2>Editar cliente</h2>
+            <p className="internal-drawer-company">Actualiza la información comercial y de contacto.</p>
+            <form className="internal-form internal-client-form" onSubmit={updateClient}>
+              <label htmlFor="edit-client-legal-name">Razón social *</label>
+              <input id="edit-client-legal-name" value={editingClient.legal_name} onChange={(event) => setEditingClient({ ...editingClient, legal_name: event.target.value })} required />
+              <label htmlFor="edit-client-trade-name">Nombre comercial</label>
+              <input id="edit-client-trade-name" value={editingClient.trade_name || ""} onChange={(event) => setEditingClient({ ...editingClient, trade_name: event.target.value })} />
+              <label htmlFor="edit-client-tax-id">RFC</label>
+              <input id="edit-client-tax-id" value={editingClient.tax_id || ""} onChange={(event) => setEditingClient({ ...editingClient, tax_id: event.target.value.toUpperCase() })} />
+              <label htmlFor="edit-client-email">Correo</label>
+              <input id="edit-client-email" type="email" value={editingClient.email || ""} onChange={(event) => setEditingClient({ ...editingClient, email: event.target.value })} />
+              <label htmlFor="edit-client-phone">Teléfono</label>
+              <input id="edit-client-phone" value={editingClient.phone || ""} onChange={(event) => setEditingClient({ ...editingClient, phone: event.target.value })} />
+              <label htmlFor="edit-client-notes">Notas</label>
+              <textarea id="edit-client-notes" rows="4" value={editingClient.notes || ""} onChange={(event) => setEditingClient({ ...editingClient, notes: event.target.value })} />
+              <label htmlFor="edit-client-status">Estado</label>
+              <select id="edit-client-status" value={editingClient.status} onChange={(event) => setEditingClient({ ...editingClient, status: event.target.value })}><option value="active">Activo</option><option value="inactive">Inactivo</option><option value="archived">Archivado</option></select>
+              <button type="submit" disabled={savingClient}>{savingClient ? "Guardando…" : "Guardar cambios"}</button>
             </form>
           </aside>
         </div>
