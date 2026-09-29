@@ -793,7 +793,7 @@ function Dashboard({ session }) {
           <div>
             <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : activeModule === "locations" ? "OPERACIONES" : activeModule === "projects" ? "OPERACIONES" : "ADMINISTRACIÓN"}</p>
             <h1>{activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : activeModule === "locations" ? "Talleres y ubicaciones" : activeModule === "projects" ? "Proyectos y trabajos" : "Personal"}</h1>
-            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "locations" ? "Talleres DOXA, instalaciones de clientes y sitios externos de trabajo." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : "Invitaciones, roles y acceso al sistema interno."}</p>
+            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "locations" ? "Talleres del grupo, instalaciones de clientes y sitios externos de trabajo." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : "Invitaciones, roles y acceso al sistema interno."}</p>
           </div>
           {activeModule === "requests" ? (
             <button type="button" className="internal-refresh" onClick={loadData} disabled={loading}>
@@ -822,7 +822,7 @@ function Dashboard({ session }) {
             <article><Users size={22} /><div><strong>{clients.length}</strong><span>Clientes registrados</span></div></article>
             <article><Building2 size={22} /><div><strong>{clients.filter((item) => item.status === "active").length}</strong><span>Activos</span></div></article>
           </> : activeModule === "locations" ? <>
-            <article><Building2 size={22} /><div><strong>{locations.filter((item) => item.kind === "company_workshop").length}</strong><span>Talleres DOXA</span></div></article>
+            <article><Building2 size={22} /><div><strong>{locations.filter((item) => item.kind === "company_workshop").length}</strong><span>Talleres del grupo</span></div></article>
             <article><ClipboardList size={22} /><div><strong>{locations.filter((item) => item.kind !== "company_workshop").length}</strong><span>Ubicaciones externas</span></div></article>
           </> : <>
             <article><ClipboardList size={22} /><div><strong>{projects.length}</strong><span>Trabajos registrados</span></div></article>
@@ -946,7 +946,7 @@ function Dashboard({ session }) {
               <label htmlFor="project-location">Taller o ubicación</label>
               <select id="project-location" value={projectForm.location_id} onChange={(event) => setProjectForm({ ...projectForm, location_id: event.target.value })}>
                 <option value="">Por definir</option>
-                <optgroup label="Talleres DOXA">
+                <optgroup label="Talleres del grupo">
                   {locations.filter((location) => location.kind === "company_workshop" && location.status === "active").map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
                 </optgroup>
                 <optgroup label="Instalaciones y sitios externos">
