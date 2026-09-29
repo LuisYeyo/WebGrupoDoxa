@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Building2, Camera, Check, ClipboardList, Download, FileText, Lightbulb, LogOut, Mail, Plus, RefreshCw, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
+import { Building2, Camera, Check, ClipboardList, Download, FileText, Lightbulb, LogOut, Mail, Pencil, Plus, RefreshCw, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -476,6 +476,7 @@ function Dashboard({ session }) {
   const [workOrders, setWorkOrders] = useState([])
   const [team, setTeam] = useState([])
   const [selectedProject, setSelectedProject] = useState(null)
+  const [editingProject, setEditingProject] = useState(false)
   const [projectLessons, setProjectLessons] = useState([])
   const [projectPhotos, setProjectPhotos] = useState([])
   const [projectDocuments, setProjectDocuments] = useState([])
@@ -501,6 +502,7 @@ function Dashboard({ session }) {
   const [projectForm, setProjectForm] = useState({
     client_id: "", location_id: "", name: "", service: "", description: "", amount: "", currency: "MXN", status: "lead", start_date: "", due_date: "",
   })
+  const [projectEditForm, setProjectEditForm] = useState(null)
   const [locationForm, setLocationForm] = useState({
     kind: "client_site", client_id: "", name: "", address_line: "", city: "", state: "Tamaulipas", postal_code: "", notes: "",
   })
@@ -522,6 +524,18 @@ function Dashboard({ session }) {
 
   const openProject = async (project) => {
     setSelectedProject(project)
+    setEditingProject(false)
+    setProjectEditForm({
+      location_id: project.work_locations?.id || "",
+      name: project.name || "",
+      service: project.service || "",
+      description: project.description || "",
+      amount: project.amount ?? "",
+      currency: project.currency || "MXN",
+      status: project.status,
+      start_date: project.start_date || "",
+      due_date: project.due_date || "",
+    })
     setProjectLessons([])
     setProjectPhotos([])
     setProjectDocuments([])
@@ -716,7 +730,7 @@ function Dashboard({ session }) {
         .select("id, legal_name, trade_name, tax_id, email, phone, status, created_at")
         .order("legal_name"),
       supabase.from("projects")
-        .select("id, code, name, service, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
+        .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
         .order("created_at", { ascending: false }),
       supabase.from("work_locations")
         .select("id, client_id, company_name, name, kind, workshop_number, address_line, city, state, postal_code, notes, status, clients(legal_name)")
@@ -819,7 +833,7 @@ function Dashboard({ session }) {
         due_date: projectForm.due_date || null,
         created_by: session.user.id,
       })
-      .select("id, code, name, service, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
+      .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
       .single()
 
     if (insertError) {
@@ -828,6 +842,36 @@ function Dashboard({ session }) {
       setProjects((current) => [data, ...current])
       setProjectForm({ client_id: "", location_id: "", name: "", service: "", description: "", amount: "", currency: "MXN", status: "lead", start_date: "", due_date: "" })
       setShowProjectForm(false)
+    }
+    setSavingProject(false)
+  }
+
+  const updateProject = async (event) => {
+    event.preventDefault()
+    if (!selectedProject || !projectEditForm || !canEditOperations) return
+
+    setSavingProject(true)
+    setError("")
+    const { data, error: updateError } = await supabase.from("projects").update({
+      location_id: projectEditForm.location_id || null,
+      name: projectEditForm.name.trim(),
+      service: projectEditForm.service.trim() || null,
+      description: projectEditForm.description.trim() || null,
+      amount: projectEditForm.amount === "" ? null : Number(projectEditForm.amount),
+      currency: projectEditForm.currency,
+      status: projectEditForm.status,
+      start_date: projectEditForm.start_date || null,
+      due_date: projectEditForm.due_date || null,
+    }).eq("id", selectedProject.id)
+      .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
+      .single()
+
+    if (updateError) {
+      setError("No fue posible actualizar el proyecto. Revisa los datos y las fechas.")
+    } else {
+      setProjects((current) => current.map((project) => project.id === data.id ? data : project))
+      setSelectedProject(data)
+      setEditingProject(false)
     }
     setSavingProject(false)
   }
@@ -1387,14 +1431,41 @@ function Dashboard({ session }) {
             <h2>{selectedProject.name}</h2>
             <p className="internal-drawer-company">{selectedProject.clients?.legal_name || "Cliente sin nombre"}</p>
 
-            <dl className="internal-detail-list">
+            {canEditOperations && <button type="button" className="project-edit-button" onClick={() => setEditingProject((current) => !current)}><Pencil size={16} /> {editingProject ? "Cancelar edición" : "Editar proyecto"}</button>}
+
+            {editingProject && projectEditForm && <form className="internal-form internal-client-form project-edit-form" onSubmit={updateProject}>
+              <label htmlFor="edit-project-name">Nombre del trabajo *</label>
+              <input id="edit-project-name" value={projectEditForm.name} onChange={(event) => setProjectEditForm({ ...projectEditForm, name: event.target.value })} required />
+              <label htmlFor="edit-project-service">Servicio</label>
+              <input id="edit-project-service" value={projectEditForm.service} onChange={(event) => setProjectEditForm({ ...projectEditForm, service: event.target.value })} />
+              <label htmlFor="edit-project-description">Descripción</label>
+              <textarea id="edit-project-description" rows="3" value={projectEditForm.description} onChange={(event) => setProjectEditForm({ ...projectEditForm, description: event.target.value })} />
+              <label htmlFor="edit-project-location">Taller o ubicación</label>
+              <select id="edit-project-location" value={projectEditForm.location_id} onChange={(event) => setProjectEditForm({ ...projectEditForm, location_id: event.target.value })}>
+                <option value="">Por definir</option>
+                {locations.filter((location) => location.status === "active").map((location) => <option key={location.id} value={location.id}>{location.name}{location.company_name ? ` — ${location.company_name}` : location.clients?.legal_name ? ` — ${location.clients.legal_name}` : ""}</option>)}
+              </select>
+              <div className="internal-form-columns">
+                <div><label htmlFor="edit-project-amount">Monto</label><input id="edit-project-amount" type="number" min="0" step="0.01" value={projectEditForm.amount} onChange={(event) => setProjectEditForm({ ...projectEditForm, amount: event.target.value })} /></div>
+                <div><label htmlFor="edit-project-currency">Moneda</label><select id="edit-project-currency" value={projectEditForm.currency} onChange={(event) => setProjectEditForm({ ...projectEditForm, currency: event.target.value })}><option value="MXN">MXN — Pesos</option><option value="USD">USD — Dólares</option></select></div>
+              </div>
+              <label htmlFor="edit-project-status">Estado</label>
+              <select id="edit-project-status" value={projectEditForm.status} onChange={(event) => setProjectEditForm({ ...projectEditForm, status: event.target.value })}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+              <div className="internal-form-columns">
+                <div><label htmlFor="edit-project-start">Inicio</label><input id="edit-project-start" type="date" value={projectEditForm.start_date} onChange={(event) => setProjectEditForm({ ...projectEditForm, start_date: event.target.value })} /></div>
+                <div><label htmlFor="edit-project-due">Entrega</label><input id="edit-project-due" type="date" min={projectEditForm.start_date || undefined} value={projectEditForm.due_date} onChange={(event) => setProjectEditForm({ ...projectEditForm, due_date: event.target.value })} /></div>
+              </div>
+              <button type="submit" disabled={savingProject}>{savingProject ? "Guardando…" : "Guardar cambios"}</button>
+            </form>}
+
+            {!editingProject && <dl className="internal-detail-list">
               <div><dt>Servicio</dt><dd>{selectedProject.service || "Sin especificar"}</dd></div>
               <div><dt>Monto</dt><dd><strong>{formatMoney(selectedProject.amount, selectedProject.currency)}</strong></dd></div>
               <div><dt>Estado</dt><dd>{STATUS_LABELS[selectedProject.status] || selectedProject.status}</dd></div>
               <div><dt>Ubicación</dt><dd>{selectedProject.work_locations?.name || "Por definir"}</dd></div>
               <div><dt>Inicio</dt><dd>{selectedProject.start_date || "Por definir"}</dd></div>
               <div><dt>Entrega</dt><dd>{selectedProject.due_date || "Por definir"}</dd></div>
-            </dl>
+            </dl>}
 
             {loadingProject ? <div className="internal-empty">Cargando expediente…</div> : <>
               <section className="project-detail-section">
