@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Building2, CalendarDays, Camera, Check, ClipboardList, Download, Eye, EyeOff, FileText, Lightbulb, LogOut, Mail, Pencil, Plus, RefreshCw, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
+import { AlertTriangle, Building2, CalendarDays, Camera, Check, ClipboardList, Download, Eye, EyeOff, FileText, Lightbulb, LogOut, Mail, Pencil, Plus, RefreshCw, Search, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -37,6 +37,8 @@ const EQUIPMENT_STATUS_LABELS = {
   inactive: "Inactivo",
   archived: "Archivado",
 }
+
+const RECORD_STATUS_LABELS = { active: "Activo", inactive: "Inactivo", archived: "Archivado" }
 
 const WORK_ORDER_STATUS_LABELS = {
   pending: "Pendiente",
@@ -485,6 +487,8 @@ function Dashboard({ session }) {
   const [error, setError] = useState("")
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [requestView, setRequestView] = useState("active")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [listStatus, setListStatus] = useState("all")
   const [savingStatus, setSavingStatus] = useState(false)
   const [clients, setClients] = useState([])
   const [projects, setProjects] = useState([])
@@ -553,7 +557,23 @@ function Dashboard({ session }) {
   const myWorkOrders = workOrders.filter((order) => order.assigned_to === session.user.id && openWorkOrderStatuses.includes(order.status))
   const activeRequests = requests.filter((request) => !["completed", "cancelled"].includes(request.status))
   const finishedRequests = requests.filter((request) => ["completed", "cancelled"].includes(request.status))
-  const visibleRequests = requestView === "finished" ? finishedRequests : activeRequests
+  const normalizedSearch = searchTerm.trim().toLocaleLowerCase("es-MX")
+  const includesSearch = (...values) => !normalizedSearch || values.some((value) => String(value || "").toLocaleLowerCase("es-MX").includes(normalizedSearch))
+  const matchesStatus = (status, options) => listStatus === "all" || !Object.hasOwn(options, listStatus) || status === listStatus
+  const visibleRequests = (requestView === "finished" ? finishedRequests : activeRequests).filter((request) =>
+    matchesStatus(request.status, STATUS_LABELS) && includesSearch(request.request_code, request.requester_name, request.company_name, request.email, request.service)
+  )
+  const visibleClients = clients.filter((client) => matchesStatus(client.status, RECORD_STATUS_LABELS) && includesSearch(client.legal_name, client.trade_name, client.tax_id, client.email, client.phone))
+  const visibleLocations = locations.filter((location) => matchesStatus(location.status, RECORD_STATUS_LABELS) && includesSearch(location.name, location.company_name, location.clients?.legal_name, location.city, location.state))
+  const visibleEquipment = equipment.filter((item) => matchesStatus(item.status, RECORD_STATUS_LABELS) && includesSearch(item.internal_code, item.name, item.category, item.brand, item.model, item.serial_number, item.work_locations?.name))
+  const visibleWorkOrders = workOrders.filter((order) => matchesStatus(order.status, WORK_ORDER_STATUS_LABELS) && includesSearch(order.code, order.title, order.description, order.projects?.code, order.projects?.name, order.profiles?.full_name))
+  const visibleProjects = projects.filter((project) => matchesStatus(project.status, STATUS_LABELS) && includesSearch(project.code, project.name, project.service, project.clients?.legal_name, project.clients?.tax_id, project.work_locations?.name))
+
+  const statusFilterOptions = activeModule === "requests" ? STATUS_LABELS
+    : activeModule === "clients" || activeModule === "locations" || activeModule === "equipment" ? RECORD_STATUS_LABELS
+      : activeModule === "workOrders" ? WORK_ORDER_STATUS_LABELS
+        : activeModule === "projects" ? STATUS_LABELS
+          : null
 
   const openProject = async (project) => {
     setSelectedProject(project)
@@ -1271,6 +1291,11 @@ function Dashboard({ session }) {
           <button type="button" role="tab" aria-selected={requestView === "finished"} className={requestView === "finished" ? "active" : ""} onClick={() => setRequestView("finished")}>Finalizadas <span>{finishedRequests.length}</span></button>
         </div>}
 
+        {!["dashboard", "users"].includes(activeModule) && <div className="internal-list-toolbar">
+          <label className="internal-search-field"><Search size={17} /><span className="sr-only">Buscar</span><input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder={activeModule === "requests" ? "Buscar por folio, cliente o servicio" : activeModule === "clients" ? "Buscar por empresa, RFC o contacto" : activeModule === "locations" ? "Buscar taller o ubicación" : activeModule === "equipment" ? "Buscar código, equipo, marca o serie" : activeModule === "workOrders" ? "Buscar orden, proyecto o responsable" : "Buscar proyecto, cliente o servicio"} /></label>
+          {statusFilterOptions && <select aria-label="Filtrar por estado" value={Object.hasOwn(statusFilterOptions, listStatus) ? listStatus : "all"} onChange={(event) => setListStatus(event.target.value)}><option value="all">Todos los estados</option>{Object.entries(statusFilterOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>}
+        </div>}
+
         {activeModule === "users" ? <InternalUsers session={session} /> : activeModule === "dashboard" ? <div className="dashboard-panels">
           <section className="dashboard-panel dashboard-panel-wide">
             <div className="dashboard-panel-heading"><div><ClipboardList size={20} /><h2>Mis órdenes pendientes</h2></div><button type="button" onClick={() => setActiveModule("workOrders")}>Ver todas</button></div>
@@ -1307,13 +1332,13 @@ function Dashboard({ session }) {
                 </tbody>
               </table>
             </div>
-          )) : activeModule === "clients" ? (clients.length === 0 ? (
+          )) : activeModule === "clients" ? (visibleClients.length === 0 ? (
             <div className="internal-empty">Todavía no hay clientes registrados.</div>
           ) : (
             <div className="internal-table-wrap">
               <table>
                 <thead><tr><th>Razón social</th><th>Nombre comercial</th><th>RFC</th><th>Contacto</th><th>Estado</th></tr></thead>
-                <tbody>{clients.map((client) => (
+                <tbody>{visibleClients.map((client) => (
                   <tr key={client.id} className={["admin", "manager", "supervisor"].includes(profile?.role) ? "internal-clickable-row" : ""} onClick={() => ["admin", "manager", "supervisor"].includes(profile?.role) && setEditingClient({ ...client })}>
                     <td><strong>{client.legal_name}</strong></td>
                     <td>{client.trade_name || "—"}</td>
@@ -1324,12 +1349,12 @@ function Dashboard({ session }) {
                 ))}</tbody>
               </table>
             </div>
-          )) : activeModule === "locations" ? (locations.length === 0 ? (
+          )) : activeModule === "locations" ? (visibleLocations.length === 0 ? (
             <div className="internal-empty">Todavía no hay talleres o ubicaciones registradas.</div>
           ) : (
             <div className="internal-table-wrap"><table>
               <thead><tr><th>Nombre</th><th>Tipo</th><th>Empresa relacionada</th><th>Ubicación</th><th>Estado</th></tr></thead>
-              <tbody>{locations.map((location) => <tr key={location.id} className={["admin", "manager", "supervisor"].includes(profile?.role) ? "internal-clickable-row" : ""} onClick={() => ["admin", "manager", "supervisor"].includes(profile?.role) && setEditingLocation({ ...location })}>
+              <tbody>{visibleLocations.map((location) => <tr key={location.id} className={["admin", "manager", "supervisor"].includes(profile?.role) ? "internal-clickable-row" : ""} onClick={() => ["admin", "manager", "supervisor"].includes(profile?.role) && setEditingLocation({ ...location })}>
                 <td><strong>{location.name}</strong></td>
                 <td>{locationTypeLabel(location)}</td>
                 <td>{location.kind === "company_workshop" ? (location.company_name || "Empresa por asignar") : location.kind === "client_site" ? (location.clients?.legal_name || "Cliente por asignar") : "Sitio externo"}</td>
@@ -1337,12 +1362,12 @@ function Dashboard({ session }) {
                 <td><span className={`internal-status status-${location.status}`}>{location.status === "active" ? "Activa" : location.status === "inactive" ? "Inactiva" : "Archivada"}</span></td>
               </tr>)}</tbody>
             </table></div>
-          )) : activeModule === "equipment" ? (equipment.length === 0 ? (
+          )) : activeModule === "equipment" ? (visibleEquipment.length === 0 ? (
             <div className="internal-empty">Todavía no hay maquinaria o equipo registrado.</div>
           ) : (
             <div className="internal-table-wrap"><table>
               <thead><tr><th>Código</th><th>Equipo</th><th>Categoría</th><th>Marca / modelo</th><th>Ubicación</th><th>Estado</th></tr></thead>
-              <tbody>{equipment.map((item) => <tr key={item.id} className={["admin", "manager", "supervisor"].includes(profile?.role) ? "internal-clickable-row" : ""} onClick={() => ["admin", "manager", "supervisor"].includes(profile?.role) && setEditingEquipment({ ...item })}>
+              <tbody>{visibleEquipment.map((item) => <tr key={item.id} className={["admin", "manager", "supervisor"].includes(profile?.role) ? "internal-clickable-row" : ""} onClick={() => ["admin", "manager", "supervisor"].includes(profile?.role) && setEditingEquipment({ ...item })}>
                 <td><strong>{item.internal_code}</strong></td>
                 <td>{item.name}</td>
                 <td>{EQUIPMENT_CATEGORY_LABELS[item.category] || item.category || "Sin categoría"}</td>
@@ -1351,12 +1376,12 @@ function Dashboard({ session }) {
                 <td><span className={`internal-status status-${item.status}`}>{EQUIPMENT_STATUS_LABELS[item.status] || item.status}</span></td>
               </tr>)}</tbody>
             </table></div>
-          )) : activeModule === "workOrders" ? (workOrders.length === 0 ? (
+          )) : activeModule === "workOrders" ? (visibleWorkOrders.length === 0 ? (
             <div className="internal-empty">Todavía no hay órdenes de trabajo. Abre un proyecto para crear la primera.</div>
           ) : (
             <div className="internal-table-wrap"><table>
               <thead><tr><th>Folio</th><th>Orden</th><th>Proyecto</th><th>Responsable</th><th>Estado</th><th>Programada</th><th>Entrega</th></tr></thead>
-              <tbody>{workOrders.map((order) => <tr key={order.id} className={canEditOperations ? "internal-clickable-row" : ""} onClick={() => canEditOperations && setEditingWorkOrder({ ...order })}>
+              <tbody>{visibleWorkOrders.map((order) => <tr key={order.id} className={canEditOperations ? "internal-clickable-row" : ""} onClick={() => canEditOperations && setEditingWorkOrder({ ...order })}>
                 <td><strong>{order.code}</strong></td>
                 <td className="internal-stacked-cell"><strong>{order.title}</strong><span>{order.description || "Sin descripción"}</span></td>
                 <td className="internal-stacked-cell"><strong>{order.projects?.name || "Proyecto no disponible"}</strong><span>{order.projects?.code || "—"}</span></td>
@@ -1366,12 +1391,12 @@ function Dashboard({ session }) {
                 <td>{order.due_date || "Por definir"}</td>
               </tr>)}</tbody>
             </table></div>
-          )) : projects.length === 0 ? (
+          )) : visibleProjects.length === 0 ? (
             <div className="internal-empty">Todavía no hay proyectos o trabajos registrados.</div>
           ) : (
             <div className="internal-table-wrap"><table>
               <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Ubicación</th><th>Servicio</th><th>Monto</th><th>Estado</th><th>Inicio</th></tr></thead>
-              <tbody>{projects.map((project) => <tr key={project.id} className="internal-clickable-row" onClick={() => openProject(project)}>
+              <tbody>{visibleProjects.map((project) => <tr key={project.id} className="internal-clickable-row" onClick={() => openProject(project)}>
                 <td><strong>{project.code}</strong></td>
                 <td>{project.name}</td>
                 <td className="internal-stacked-cell"><strong>{project.clients?.legal_name || "—"}</strong><span>{project.clients?.tax_id || "Sin RFC"}</span></td>
