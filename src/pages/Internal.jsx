@@ -32,6 +32,15 @@ const EQUIPMENT_CATEGORY_LABELS = {
   other: "Otro",
 }
 
+const WORK_ORDER_STATUS_LABELS = {
+  pending: "Pendiente",
+  scheduled: "Programada",
+  in_progress: "En proceso",
+  blocked: "Bloqueada",
+  completed: "Terminada",
+  cancelled: "Cancelada",
+}
+
 function formatDate(value) {
   if (!value) return "—"
   return new Intl.DateTimeFormat("es-MX", {
@@ -44,6 +53,12 @@ function createProjectCode() {
   const date = new Date().toISOString().slice(2, 10).replaceAll("-", "")
   const random = Math.random().toString(36).slice(2, 6).toUpperCase()
   return `PR-${date}-${random}`
+}
+
+function createWorkOrderCode() {
+  const date = new Date().toISOString().slice(2, 10).replaceAll("-", "")
+  const random = Math.random().toString(36).slice(2, 6).toUpperCase()
+  return `OT-${date}-${random}`
 }
 
 function locationTypeLabel(location) {
@@ -442,6 +457,8 @@ function Dashboard({ session }) {
   const [locations, setLocations] = useState([])
   const [equipment, setEquipment] = useState([])
   const [projectEquipment, setProjectEquipment] = useState([])
+  const [workOrders, setWorkOrders] = useState([])
+  const [team, setTeam] = useState([])
   const [selectedProject, setSelectedProject] = useState(null)
   const [projectLessons, setProjectLessons] = useState([])
   const [projectPhotos, setProjectPhotos] = useState([])
@@ -459,6 +476,7 @@ function Dashboard({ session }) {
   const [savingLocation, setSavingLocation] = useState(false)
   const [savingEquipment, setSavingEquipment] = useState(false)
   const [assigningEquipment, setAssigningEquipment] = useState(false)
+  const [savingWorkOrder, setSavingWorkOrder] = useState(false)
   const [clientForm, setClientForm] = useState({
     legal_name: "", trade_name: "", tax_id: "", email: "", phone: "", notes: "",
   })
@@ -473,6 +491,9 @@ function Dashboard({ session }) {
   })
   const [assignmentForm, setAssignmentForm] = useState({
     equipment_id: "", purpose: "", planned_from: "", planned_until: "", notes: "",
+  })
+  const [workOrderForm, setWorkOrderForm] = useState({
+    assigned_to: "", title: "", description: "", status: "pending", scheduled_date: "", due_date: "",
   })
   const [lessonForm, setLessonForm] = useState({
     category: "challenge", title: "", situation: "", lesson: "",
@@ -605,7 +626,7 @@ function Dashboard({ session }) {
     setLoading(true)
     setError("")
 
-    const [profileResult, requestResult, clientResult, projectResult, locationResult, equipmentResult] = await Promise.all([
+    const [profileResult, requestResult, clientResult, projectResult, locationResult, equipmentResult, workOrderResult, teamResult] = await Promise.all([
       supabase.from("profiles").select("full_name, role, active")
         .eq("id", session.user.id).single(),
       supabase.from("quote_requests")
@@ -623,9 +644,16 @@ function Dashboard({ session }) {
       supabase.from("equipment")
         .select("id, location_id, internal_code, name, category, brand, model, serial_number, status, last_maintenance_date, next_maintenance_date, notes, work_locations(name)")
         .order("internal_code"),
+      supabase.from("work_orders")
+        .select("id, project_id, assigned_to, code, title, description, status, scheduled_date, due_date, completed_at, created_at, projects(id, code, name), profiles!work_orders_assigned_to_fkey(id, full_name)")
+        .order("created_at", { ascending: false }),
+      supabase.from("profiles")
+        .select("id, full_name, role, active")
+        .eq("active", true)
+        .order("full_name"),
     ])
 
-    if (profileResult.error || requestResult.error || clientResult.error || projectResult.error || locationResult.error || equipmentResult.error) {
+    if (profileResult.error || requestResult.error || clientResult.error || projectResult.error || locationResult.error || equipmentResult.error || workOrderResult.error || teamResult.error) {
       setError("No se pudo cargar la información. Verifica que tu usuario esté activo.")
     } else {
       setProfile(profileResult.data)
@@ -634,6 +662,8 @@ function Dashboard({ session }) {
       setProjects(projectResult.data ?? [])
       setLocations(locationResult.data ?? [])
       setEquipment(equipmentResult.data ?? [])
+      setWorkOrders(workOrderResult.data ?? [])
+      setTeam(teamResult.data ?? [])
     }
     setLoading(false)
   }, [session.user.id])
@@ -846,6 +876,56 @@ function Dashboard({ session }) {
     setAssigningEquipment(false)
   }
 
+  const createWorkOrder = async (event) => {
+    event.preventDefault()
+    if (!selectedProject || !canEditOperations) return
+
+    setSavingWorkOrder(true)
+    setError("")
+    const { data, error: insertError } = await supabase
+      .from("work_orders")
+      .insert({
+        project_id: selectedProject.id,
+        assigned_to: workOrderForm.assigned_to || null,
+        code: createWorkOrderCode(),
+        title: workOrderForm.title.trim(),
+        description: workOrderForm.description.trim() || null,
+        status: workOrderForm.status,
+        scheduled_date: workOrderForm.scheduled_date || null,
+        due_date: workOrderForm.due_date || null,
+        completed_at: workOrderForm.status === "completed" ? new Date().toISOString() : null,
+        created_by: session.user.id,
+      })
+      .select("id, project_id, assigned_to, code, title, description, status, scheduled_date, due_date, completed_at, created_at, projects(id, code, name), profiles!work_orders_assigned_to_fkey(id, full_name)")
+      .single()
+
+    if (insertError) {
+      setError("No fue posible crear la orden de trabajo. Revisa las fechas y los datos.")
+    } else {
+      setWorkOrders((current) => [data, ...current])
+      setWorkOrderForm({ assigned_to: "", title: "", description: "", status: "pending", scheduled_date: "", due_date: "" })
+    }
+    setSavingWorkOrder(false)
+  }
+
+  const updateWorkOrderStatus = async (order, status) => {
+    if (!canEditOperations) return
+    setError("")
+    const { error: updateError } = await supabase
+      .from("work_orders")
+      .update({
+        status,
+        completed_at: status === "completed" ? (order.completed_at || new Date().toISOString()) : null,
+      })
+      .eq("id", order.id)
+
+    if (updateError) {
+      setError("No fue posible actualizar la orden de trabajo.")
+      return
+    }
+    setWorkOrders((current) => current.map((item) => item.id === order.id ? { ...item, status, completed_at: status === "completed" ? (item.completed_at || new Date().toISOString()) : null } : item))
+  }
+
   useEffect(() => {
     const timeout = window.setTimeout(loadData, 0)
     return () => window.clearTimeout(timeout)
@@ -876,6 +956,7 @@ function Dashboard({ session }) {
         <button type="button" className={activeModule === "clients" ? "active" : ""} onClick={() => setActiveModule("clients")}>Clientes</button>
         <button type="button" className={activeModule === "locations" ? "active" : ""} onClick={() => setActiveModule("locations")}>Talleres y ubicaciones</button>
         <button type="button" className={activeModule === "equipment" ? "active" : ""} onClick={() => setActiveModule("equipment")}>Maquinaria y equipo</button>
+        <button type="button" className={activeModule === "workOrders" ? "active" : ""} onClick={() => setActiveModule("workOrders")}>Órdenes de trabajo</button>
         {profile?.role === "admin" && <button type="button" className={activeModule === "users" ? "active" : ""} onClick={() => setActiveModule("users")}>Personal</button>}
         <button type="button" className={activeModule === "projects" ? "active" : ""} onClick={() => setActiveModule("projects")}>Proyectos</button>
       </nav>
@@ -883,9 +964,9 @@ function Dashboard({ session }) {
       <section className="internal-content">
         <div className="internal-heading-row">
           <div>
-            <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : ["locations", "equipment", "projects"].includes(activeModule) ? "OPERACIONES" : "ADMINISTRACIÓN"}</p>
-            <h1>{activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : activeModule === "locations" ? "Talleres y ubicaciones" : activeModule === "equipment" ? "Maquinaria y equipo" : activeModule === "projects" ? "Proyectos y trabajos" : "Personal"}</h1>
-            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "locations" ? "Talleres del grupo, instalaciones de clientes y sitios externos de trabajo." : activeModule === "equipment" ? "Inventario, ubicación y disponibilidad de los equipos operativos." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : "Invitaciones, roles y acceso al sistema interno."}</p>
+            <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : ["locations", "equipment", "workOrders", "projects"].includes(activeModule) ? "OPERACIONES" : "ADMINISTRACIÓN"}</p>
+            <h1>{activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : activeModule === "locations" ? "Talleres y ubicaciones" : activeModule === "equipment" ? "Maquinaria y equipo" : activeModule === "workOrders" ? "Órdenes de trabajo" : activeModule === "projects" ? "Proyectos y trabajos" : "Personal"}</h1>
+            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "locations" ? "Talleres del grupo, instalaciones de clientes y sitios externos de trabajo." : activeModule === "equipment" ? "Inventario, ubicación y disponibilidad de los equipos operativos." : activeModule === "workOrders" ? "Actividades asignadas al personal para ejecutar cada proyecto." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : "Invitaciones, roles y acceso al sistema interno."}</p>
           </div>
           {activeModule === "requests" ? (
             <button type="button" className="internal-refresh" onClick={loadData} disabled={loading}>
@@ -923,6 +1004,9 @@ function Dashboard({ session }) {
           </> : activeModule === "equipment" ? <>
             <article><Wrench size={22} /><div><strong>{equipment.length}</strong><span>Equipos registrados</span></div></article>
             <article><Check size={22} /><div><strong>{equipment.filter((item) => item.status === "active").length}</strong><span>Activos</span></div></article>
+          </> : activeModule === "workOrders" ? <>
+            <article><ClipboardList size={22} /><div><strong>{workOrders.length}</strong><span>Órdenes registradas</span></div></article>
+            <article><RefreshCw size={22} /><div><strong>{workOrders.filter((item) => ["scheduled", "in_progress", "blocked"].includes(item.status)).length}</strong><span>En seguimiento</span></div></article>
           </> : <>
             <article><ClipboardList size={22} /><div><strong>{projects.length}</strong><span>Trabajos registrados</span></div></article>
             <article><RefreshCw size={22} /><div><strong>{projects.filter((item) => item.status === "in_progress").length}</strong><span>En proceso</span></div></article>
@@ -995,6 +1079,21 @@ function Dashboard({ session }) {
                 <td>{[item.brand, item.model].filter(Boolean).join(" · ") || "—"}</td>
                 <td>{item.work_locations?.name || "Sin asignar"}</td>
                 <td><span className={`internal-status status-${item.status}`}>{item.status === "active" ? "Activo" : item.status === "inactive" ? "Inactivo" : "Archivado"}</span></td>
+              </tr>)}</tbody>
+            </table></div>
+          )) : activeModule === "workOrders" ? (workOrders.length === 0 ? (
+            <div className="internal-empty">Todavía no hay órdenes de trabajo. Abre un proyecto para crear la primera.</div>
+          ) : (
+            <div className="internal-table-wrap"><table>
+              <thead><tr><th>Folio</th><th>Orden</th><th>Proyecto</th><th>Responsable</th><th>Estado</th><th>Programada</th><th>Entrega</th></tr></thead>
+              <tbody>{workOrders.map((order) => <tr key={order.id}>
+                <td><strong>{order.code}</strong></td>
+                <td className="internal-stacked-cell"><strong>{order.title}</strong><span>{order.description || "Sin descripción"}</span></td>
+                <td className="internal-stacked-cell"><strong>{order.projects?.name || "Proyecto no disponible"}</strong><span>{order.projects?.code || "—"}</span></td>
+                <td>{order.profiles?.full_name || "Sin asignar"}</td>
+                <td><select className="work-order-status-select" value={order.status} onChange={(event) => updateWorkOrderStatus(order, event.target.value)} disabled={!canEditOperations || savingWorkOrder}>{Object.entries(WORK_ORDER_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></td>
+                <td>{order.scheduled_date || "Por definir"}</td>
+                <td>{order.due_date || "Por definir"}</td>
               </tr>)}</tbody>
             </table></div>
           )) : projects.length === 0 ? (
@@ -1210,6 +1309,33 @@ function Dashboard({ session }) {
             </dl>
 
             {loadingProject ? <div className="internal-empty">Cargando expediente…</div> : <>
+              <section className="project-detail-section">
+                <div className="project-detail-heading"><div><ClipboardList size={20} /><h3>Órdenes de trabajo</h3></div></div>
+                {workOrders.filter((order) => order.project_id === selectedProject.id).length === 0 ? <p className="project-section-empty">Todavía no hay órdenes para este proyecto.</p> : (
+                  <div className="project-work-order-list">{workOrders.filter((order) => order.project_id === selectedProject.id).map((order) => <article key={order.id}>
+                    <div className="project-work-order-heading"><div><strong>{order.code}</strong><h4>{order.title}</h4></div><select value={order.status} onChange={(event) => updateWorkOrderStatus(order, event.target.value)} disabled={!canEditOperations || savingWorkOrder}>{Object.entries(WORK_ORDER_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+                    {order.description && <p>{order.description}</p>}
+                    <small>Responsable: {order.profiles?.full_name || "Sin asignar"} · Programada: {order.scheduled_date || "por definir"} · Entrega: {order.due_date || "por definir"}</small>
+                  </article>)}</div>
+                )}
+                {canEditOperations && <form className="internal-form internal-client-form project-lesson-form" onSubmit={createWorkOrder}>
+                  <h4>Crear orden de trabajo</h4>
+                  <label htmlFor="work-order-title">Actividad *</label>
+                  <input id="work-order-title" minLength={3} maxLength={160} value={workOrderForm.title} onChange={(event) => setWorkOrderForm({ ...workOrderForm, title: event.target.value })} required />
+                  <label htmlFor="work-order-assignee">Responsable</label>
+                  <select id="work-order-assignee" value={workOrderForm.assigned_to} onChange={(event) => setWorkOrderForm({ ...workOrderForm, assigned_to: event.target.value })}><option value="">Sin asignar</option>{team.map((member) => <option key={member.id} value={member.id}>{member.full_name} — {ROLE_LABELS[member.role] || member.role}</option>)}</select>
+                  <label htmlFor="work-order-description">Instrucciones o alcance</label>
+                  <textarea id="work-order-description" rows="3" maxLength={4000} value={workOrderForm.description} onChange={(event) => setWorkOrderForm({ ...workOrderForm, description: event.target.value })} />
+                  <div className="internal-form-columns">
+                    <div><label htmlFor="work-order-scheduled">Programada</label><input id="work-order-scheduled" type="date" value={workOrderForm.scheduled_date} onChange={(event) => setWorkOrderForm({ ...workOrderForm, scheduled_date: event.target.value })} /></div>
+                    <div><label htmlFor="work-order-due">Entrega</label><input id="work-order-due" type="date" min={workOrderForm.scheduled_date || undefined} value={workOrderForm.due_date} onChange={(event) => setWorkOrderForm({ ...workOrderForm, due_date: event.target.value })} /></div>
+                  </div>
+                  <label htmlFor="work-order-status">Estado inicial</label>
+                  <select id="work-order-status" value={workOrderForm.status} onChange={(event) => setWorkOrderForm({ ...workOrderForm, status: event.target.value })}>{Object.entries(WORK_ORDER_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+                  <button type="submit" disabled={savingWorkOrder}>{savingWorkOrder ? "Guardando…" : "Crear orden"}</button>
+                </form>}
+              </section>
+
               <section className="project-detail-section">
                 <div className="project-detail-heading"><div><Wrench size={20} /><h3>Maquinaria y equipo asignado</h3></div></div>
                 {projectEquipment.length === 0 ? <p className="project-section-empty">Todavía no hay equipos asignados.</p> : (
