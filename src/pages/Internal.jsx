@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Building2, Camera, Check, ClipboardList, Lightbulb, LogOut, Mail, Plus, RefreshCw, ShieldCheck, Upload, Users, X } from "lucide-react"
+import { Building2, Camera, Check, ClipboardList, Lightbulb, LogOut, Mail, Plus, RefreshCw, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -20,6 +20,16 @@ const STATUS_LABELS = {
   on_hold: "En espera",
   completed: "Completada",
   cancelled: "Cancelada",
+}
+
+const EQUIPMENT_CATEGORY_LABELS = {
+  lifting: "Izaje y carga",
+  power: "Generación eléctrica",
+  welding: "Soldadura",
+  air: "Aire comprimido",
+  transport: "Transporte",
+  drilling: "Perforación",
+  other: "Otro",
 }
 
 function formatDate(value) {
@@ -430,6 +440,8 @@ function Dashboard({ session }) {
   const [clients, setClients] = useState([])
   const [projects, setProjects] = useState([])
   const [locations, setLocations] = useState([])
+  const [equipment, setEquipment] = useState([])
+  const [projectEquipment, setProjectEquipment] = useState([])
   const [selectedProject, setSelectedProject] = useState(null)
   const [projectLessons, setProjectLessons] = useState([])
   const [projectPhotos, setProjectPhotos] = useState([])
@@ -441,9 +453,12 @@ function Dashboard({ session }) {
   const [savingClient, setSavingClient] = useState(false)
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [showLocationForm, setShowLocationForm] = useState(false)
+  const [showEquipmentForm, setShowEquipmentForm] = useState(false)
   const [editingLocation, setEditingLocation] = useState(null)
   const [savingProject, setSavingProject] = useState(false)
   const [savingLocation, setSavingLocation] = useState(false)
+  const [savingEquipment, setSavingEquipment] = useState(false)
+  const [assigningEquipment, setAssigningEquipment] = useState(false)
   const [clientForm, setClientForm] = useState({
     legal_name: "", trade_name: "", tax_id: "", email: "", phone: "", notes: "",
   })
@@ -452,6 +467,12 @@ function Dashboard({ session }) {
   })
   const [locationForm, setLocationForm] = useState({
     kind: "client_site", client_id: "", name: "", address_line: "", city: "", state: "Tamaulipas", postal_code: "", notes: "",
+  })
+  const [equipmentForm, setEquipmentForm] = useState({
+    internal_code: "", name: "", category: "other", brand: "", model: "", serial_number: "", location_id: "", notes: "",
+  })
+  const [assignmentForm, setAssignmentForm] = useState({
+    equipment_id: "", purpose: "", planned_from: "", planned_until: "", notes: "",
   })
   const [lessonForm, setLessonForm] = useState({
     category: "challenge", title: "", situation: "", lesson: "",
@@ -463,10 +484,11 @@ function Dashboard({ session }) {
     setSelectedProject(project)
     setProjectLessons([])
     setProjectPhotos([])
+    setProjectEquipment([])
     setLoadingProject(true)
     setError("")
 
-    const [lessonResult, photoResult] = await Promise.all([
+    const [lessonResult, photoResult, equipmentResult] = await Promise.all([
       supabase.from("project_lessons")
         .select("id, category, title, situation, lesson, created_at, profiles(full_name)")
         .eq("project_id", project.id)
@@ -476,10 +498,14 @@ function Dashboard({ session }) {
         .eq("project_id", project.id)
         .eq("category", "work_evidence")
         .order("created_at", { ascending: false }),
+      supabase.from("project_equipment")
+        .select("equipment_id, purpose, planned_from, planned_until, notes, equipment(id, internal_code, name, brand, model)")
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false }),
     ])
 
-    if (lessonResult.error || photoResult.error) {
-      setError("No fue posible cargar las lecciones o fotografías del proyecto.")
+    if (lessonResult.error || photoResult.error || equipmentResult.error) {
+      setError("No fue posible cargar el expediente completo del proyecto.")
     } else {
       setProjectLessons(lessonResult.data ?? [])
       const photosWithUrls = await Promise.all((photoResult.data ?? []).map(async (photo) => {
@@ -487,6 +513,7 @@ function Dashboard({ session }) {
         return { ...photo, url: data?.signedUrl || "" }
       }))
       setProjectPhotos(photosWithUrls)
+      setProjectEquipment(equipmentResult.data ?? [])
     }
     setLoadingProject(false)
   }
@@ -578,7 +605,7 @@ function Dashboard({ session }) {
     setLoading(true)
     setError("")
 
-    const [profileResult, requestResult, clientResult, projectResult, locationResult] = await Promise.all([
+    const [profileResult, requestResult, clientResult, projectResult, locationResult, equipmentResult] = await Promise.all([
       supabase.from("profiles").select("full_name, role, active")
         .eq("id", session.user.id).single(),
       supabase.from("quote_requests")
@@ -593,9 +620,12 @@ function Dashboard({ session }) {
       supabase.from("work_locations")
         .select("id, client_id, company_name, name, kind, workshop_number, address_line, city, state, postal_code, notes, status, clients(legal_name)")
         .order("kind").order("workshop_number").order("name"),
+      supabase.from("equipment")
+        .select("id, location_id, internal_code, name, category, brand, model, serial_number, status, last_maintenance_date, next_maintenance_date, notes, work_locations(name)")
+        .order("internal_code"),
     ])
 
-    if (profileResult.error || requestResult.error || clientResult.error || projectResult.error || locationResult.error) {
+    if (profileResult.error || requestResult.error || clientResult.error || projectResult.error || locationResult.error || equipmentResult.error) {
       setError("No se pudo cargar la información. Verifica que tu usuario esté activo.")
     } else {
       setProfile(profileResult.data)
@@ -603,6 +633,7 @@ function Dashboard({ session }) {
       setClients(clientResult.data ?? [])
       setProjects(projectResult.data ?? [])
       setLocations(locationResult.data ?? [])
+      setEquipment(equipmentResult.data ?? [])
     }
     setLoading(false)
   }, [session.user.id])
@@ -755,6 +786,66 @@ function Dashboard({ session }) {
     setSavingLocation(false)
   }
 
+  const createEquipment = async (event) => {
+    event.preventDefault()
+    if (!["admin", "manager", "supervisor"].includes(profile?.role)) return
+
+    setSavingEquipment(true)
+    setError("")
+    const { data, error: insertError } = await supabase
+      .from("equipment")
+      .insert({
+        internal_code: equipmentForm.internal_code.trim().toUpperCase(),
+        name: equipmentForm.name.trim(),
+        category: equipmentForm.category,
+        brand: equipmentForm.brand.trim() || null,
+        model: equipmentForm.model.trim() || null,
+        serial_number: equipmentForm.serial_number.trim() || null,
+        location_id: equipmentForm.location_id || null,
+        notes: equipmentForm.notes.trim() || null,
+      })
+      .select("id, location_id, internal_code, name, category, brand, model, serial_number, status, last_maintenance_date, next_maintenance_date, notes, work_locations(name)")
+      .single()
+
+    if (insertError) {
+      setError("No fue posible registrar el equipo. Revisa que el código interno no esté repetido.")
+    } else {
+      setEquipment((current) => [...current, data].sort((a, b) => a.internal_code.localeCompare(b.internal_code)))
+      setEquipmentForm({ internal_code: "", name: "", category: "other", brand: "", model: "", serial_number: "", location_id: "", notes: "" })
+      setShowEquipmentForm(false)
+    }
+    setSavingEquipment(false)
+  }
+
+  const assignEquipment = async (event) => {
+    event.preventDefault()
+    if (!selectedProject || !canEditOperations || !assignmentForm.equipment_id) return
+
+    setAssigningEquipment(true)
+    setError("")
+    const { data, error: insertError } = await supabase
+      .from("project_equipment")
+      .insert({
+        project_id: selectedProject.id,
+        equipment_id: assignmentForm.equipment_id,
+        assigned_by: session.user.id,
+        purpose: assignmentForm.purpose.trim() || null,
+        planned_from: assignmentForm.planned_from || null,
+        planned_until: assignmentForm.planned_until || null,
+        notes: assignmentForm.notes.trim() || null,
+      })
+      .select("equipment_id, purpose, planned_from, planned_until, notes, equipment(id, internal_code, name, brand, model)")
+      .single()
+
+    if (insertError) {
+      setError("No fue posible asignar el equipo. Puede que ya esté agregado al proyecto o que las fechas sean inválidas.")
+    } else {
+      setProjectEquipment((current) => [data, ...current])
+      setAssignmentForm({ equipment_id: "", purpose: "", planned_from: "", planned_until: "", notes: "" })
+    }
+    setAssigningEquipment(false)
+  }
+
   useEffect(() => {
     const timeout = window.setTimeout(loadData, 0)
     return () => window.clearTimeout(timeout)
@@ -784,6 +875,7 @@ function Dashboard({ session }) {
         <button type="button" className={activeModule === "requests" ? "active" : ""} onClick={() => setActiveModule("requests")}>Solicitudes</button>
         <button type="button" className={activeModule === "clients" ? "active" : ""} onClick={() => setActiveModule("clients")}>Clientes</button>
         <button type="button" className={activeModule === "locations" ? "active" : ""} onClick={() => setActiveModule("locations")}>Talleres y ubicaciones</button>
+        <button type="button" className={activeModule === "equipment" ? "active" : ""} onClick={() => setActiveModule("equipment")}>Maquinaria y equipo</button>
         {profile?.role === "admin" && <button type="button" className={activeModule === "users" ? "active" : ""} onClick={() => setActiveModule("users")}>Personal</button>}
         <button type="button" className={activeModule === "projects" ? "active" : ""} onClick={() => setActiveModule("projects")}>Proyectos</button>
       </nav>
@@ -791,9 +883,9 @@ function Dashboard({ session }) {
       <section className="internal-content">
         <div className="internal-heading-row">
           <div>
-            <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : activeModule === "locations" ? "OPERACIONES" : activeModule === "projects" ? "OPERACIONES" : "ADMINISTRACIÓN"}</p>
-            <h1>{activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : activeModule === "locations" ? "Talleres y ubicaciones" : activeModule === "projects" ? "Proyectos y trabajos" : "Personal"}</h1>
-            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "locations" ? "Talleres del grupo, instalaciones de clientes y sitios externos de trabajo." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : "Invitaciones, roles y acceso al sistema interno."}</p>
+            <p className="internal-eyebrow">{activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : ["locations", "equipment", "projects"].includes(activeModule) ? "OPERACIONES" : "ADMINISTRACIÓN"}</p>
+            <h1>{activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : activeModule === "locations" ? "Talleres y ubicaciones" : activeModule === "equipment" ? "Maquinaria y equipo" : activeModule === "projects" ? "Proyectos y trabajos" : "Personal"}</h1>
+            <p>{activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "locations" ? "Talleres del grupo, instalaciones de clientes y sitios externos de trabajo." : activeModule === "equipment" ? "Inventario, ubicación y disponibilidad de los equipos operativos." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : "Invitaciones, roles y acceso al sistema interno."}</p>
           </div>
           {activeModule === "requests" ? (
             <button type="button" className="internal-refresh" onClick={loadData} disabled={loading}>
@@ -806,6 +898,10 @@ function Dashboard({ session }) {
           ) : activeModule === "locations" && ["admin", "manager", "supervisor"].includes(profile?.role) ? (
             <button type="button" className="internal-primary-action" onClick={() => setShowLocationForm(true)}>
               <Plus size={17} /> Nueva ubicación
+            </button>
+          ) : activeModule === "equipment" && ["admin", "manager", "supervisor"].includes(profile?.role) ? (
+            <button type="button" className="internal-primary-action" onClick={() => setShowEquipmentForm(true)}>
+              <Plus size={17} /> Nuevo equipo
             </button>
           ) : activeModule === "projects" && ["admin", "manager", "supervisor", "staff"].includes(profile?.role) ? (
             <button type="button" className="internal-primary-action" onClick={() => setShowProjectForm(true)}>
@@ -824,6 +920,9 @@ function Dashboard({ session }) {
           </> : activeModule === "locations" ? <>
             <article><Building2 size={22} /><div><strong>{locations.filter((item) => item.kind === "company_workshop").length}</strong><span>Talleres del grupo</span></div></article>
             <article><ClipboardList size={22} /><div><strong>{locations.filter((item) => item.kind !== "company_workshop").length}</strong><span>Ubicaciones externas</span></div></article>
+          </> : activeModule === "equipment" ? <>
+            <article><Wrench size={22} /><div><strong>{equipment.length}</strong><span>Equipos registrados</span></div></article>
+            <article><Check size={22} /><div><strong>{equipment.filter((item) => item.status === "active").length}</strong><span>Activos</span></div></article>
           </> : <>
             <article><ClipboardList size={22} /><div><strong>{projects.length}</strong><span>Trabajos registrados</span></div></article>
             <article><RefreshCw size={22} /><div><strong>{projects.filter((item) => item.status === "in_progress").length}</strong><span>En proceso</span></div></article>
@@ -882,6 +981,20 @@ function Dashboard({ session }) {
                 <td>{location.kind === "company_workshop" ? (location.company_name || "Empresa por asignar") : location.kind === "client_site" ? (location.clients?.legal_name || "Cliente por asignar") : "Sitio externo"}</td>
                 <td>{[location.address_line, location.city, location.state].filter(Boolean).join(", ") || "Por definir"}</td>
                 <td><span className={`internal-status status-${location.status}`}>{location.status === "active" ? "Activa" : location.status === "inactive" ? "Inactiva" : "Archivada"}</span></td>
+              </tr>)}</tbody>
+            </table></div>
+          )) : activeModule === "equipment" ? (equipment.length === 0 ? (
+            <div className="internal-empty">Todavía no hay maquinaria o equipo registrado.</div>
+          ) : (
+            <div className="internal-table-wrap"><table>
+              <thead><tr><th>Código</th><th>Equipo</th><th>Categoría</th><th>Marca / modelo</th><th>Ubicación</th><th>Estado</th></tr></thead>
+              <tbody>{equipment.map((item) => <tr key={item.id}>
+                <td><strong>{item.internal_code}</strong></td>
+                <td>{item.name}</td>
+                <td>{EQUIPMENT_CATEGORY_LABELS[item.category] || item.category || "Sin categoría"}</td>
+                <td>{[item.brand, item.model].filter(Boolean).join(" · ") || "—"}</td>
+                <td>{item.work_locations?.name || "Sin asignar"}</td>
+                <td><span className={`internal-status status-${item.status}`}>{item.status === "active" ? "Activo" : item.status === "inactive" ? "Inactivo" : "Archivado"}</span></td>
               </tr>)}</tbody>
             </table></div>
           )) : projects.length === 0 ? (
@@ -1045,6 +1158,41 @@ function Dashboard({ session }) {
         </div>
       )}
 
+      {showEquipmentForm && (
+        <div className="internal-drawer-backdrop" onClick={() => setShowEquipmentForm(false)}>
+          <aside className="internal-drawer" onClick={(event) => event.stopPropagation()} aria-label="Nuevo equipo">
+            <button type="button" className="internal-drawer-close" onClick={() => setShowEquipmentForm(false)} aria-label="Cerrar"><X size={20} /></button>
+            <p className="internal-eyebrow">INVENTARIO</p>
+            <h2>Nuevo equipo</h2>
+            <p className="internal-drawer-company">Registra maquinaria, vehículos y herramientas operativas.</p>
+            <form className="internal-form internal-client-form" onSubmit={createEquipment}>
+              <label htmlFor="equipment-code">Código interno *</label>
+              <input id="equipment-code" placeholder="Ej. EQ-010" value={equipmentForm.internal_code} onChange={(event) => setEquipmentForm({ ...equipmentForm, internal_code: event.target.value.toUpperCase() })} required />
+              <label htmlFor="equipment-name">Nombre del equipo *</label>
+              <input id="equipment-name" value={equipmentForm.name} onChange={(event) => setEquipmentForm({ ...equipmentForm, name: event.target.value })} required />
+              <label htmlFor="equipment-category">Categoría</label>
+              <select id="equipment-category" value={equipmentForm.category} onChange={(event) => setEquipmentForm({ ...equipmentForm, category: event.target.value })}>
+                {Object.entries(EQUIPMENT_CATEGORY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <div className="internal-form-columns">
+                <div><label htmlFor="equipment-brand">Marca</label><input id="equipment-brand" value={equipmentForm.brand} onChange={(event) => setEquipmentForm({ ...equipmentForm, brand: event.target.value })} /></div>
+                <div><label htmlFor="equipment-model">Modelo</label><input id="equipment-model" value={equipmentForm.model} onChange={(event) => setEquipmentForm({ ...equipmentForm, model: event.target.value })} /></div>
+              </div>
+              <label htmlFor="equipment-serial">Número de serie</label>
+              <input id="equipment-serial" value={equipmentForm.serial_number} onChange={(event) => setEquipmentForm({ ...equipmentForm, serial_number: event.target.value })} />
+              <label htmlFor="equipment-location">Ubicación actual</label>
+              <select id="equipment-location" value={equipmentForm.location_id} onChange={(event) => setEquipmentForm({ ...equipmentForm, location_id: event.target.value })}>
+                <option value="">Sin asignar</option>
+                {locations.filter((location) => location.status === "active").map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+              </select>
+              <label htmlFor="equipment-notes">Capacidad, uso o notas</label>
+              <textarea id="equipment-notes" rows="4" value={equipmentForm.notes} onChange={(event) => setEquipmentForm({ ...equipmentForm, notes: event.target.value })} />
+              <button type="submit" disabled={savingEquipment}>{savingEquipment ? "Guardando…" : "Guardar equipo"}</button>
+            </form>
+          </aside>
+        </div>
+      )}
+
       {selectedProject && (
         <div className="internal-drawer-backdrop" onClick={() => setSelectedProject(null)}>
           <aside className="internal-drawer internal-project-drawer" onClick={(event) => event.stopPropagation()} aria-label="Detalle del proyecto">
@@ -1062,6 +1210,34 @@ function Dashboard({ session }) {
             </dl>
 
             {loadingProject ? <div className="internal-empty">Cargando expediente…</div> : <>
+              <section className="project-detail-section">
+                <div className="project-detail-heading"><div><Wrench size={20} /><h3>Maquinaria y equipo asignado</h3></div></div>
+                {projectEquipment.length === 0 ? <p className="project-section-empty">Todavía no hay equipos asignados.</p> : (
+                  <div className="project-equipment-list">{projectEquipment.map((item) => <article key={item.equipment_id}>
+                    <div><strong>{item.equipment?.internal_code} · {item.equipment?.name}</strong><span>{[item.equipment?.brand, item.equipment?.model].filter(Boolean).join(" · ")}</span></div>
+                    <p>{item.purpose || "Sin propósito indicado"}</p>
+                    <small>{item.planned_from || "Fecha abierta"} → {item.planned_until || "Sin fecha final"}</small>
+                  </article>)}</div>
+                )}
+                {canEditOperations && <form className="internal-form internal-client-form project-lesson-form" onSubmit={assignEquipment}>
+                  <h4>Asignar equipo</h4>
+                  <label htmlFor="assignment-equipment">Equipo *</label>
+                  <select id="assignment-equipment" value={assignmentForm.equipment_id} onChange={(event) => setAssignmentForm({ ...assignmentForm, equipment_id: event.target.value })} required>
+                    <option value="">Selecciona un equipo</option>
+                    {equipment.filter((item) => item.status === "active" && !projectEquipment.some((assigned) => assigned.equipment_id === item.id)).map((item) => <option key={item.id} value={item.id}>{item.internal_code} — {item.name}</option>)}
+                  </select>
+                  <label htmlFor="assignment-purpose">Uso dentro del proyecto</label>
+                  <input id="assignment-purpose" value={assignmentForm.purpose} onChange={(event) => setAssignmentForm({ ...assignmentForm, purpose: event.target.value })} placeholder="Ej. Maniobra e izaje de estructura" />
+                  <div className="internal-form-columns">
+                    <div><label htmlFor="assignment-from">Desde</label><input id="assignment-from" type="date" value={assignmentForm.planned_from} onChange={(event) => setAssignmentForm({ ...assignmentForm, planned_from: event.target.value })} /></div>
+                    <div><label htmlFor="assignment-until">Hasta</label><input id="assignment-until" type="date" min={assignmentForm.planned_from || undefined} value={assignmentForm.planned_until} onChange={(event) => setAssignmentForm({ ...assignmentForm, planned_until: event.target.value })} /></div>
+                  </div>
+                  <label htmlFor="assignment-notes">Notas</label>
+                  <textarea id="assignment-notes" rows="2" value={assignmentForm.notes} onChange={(event) => setAssignmentForm({ ...assignmentForm, notes: event.target.value })} />
+                  <button type="submit" disabled={assigningEquipment || !assignmentForm.equipment_id}>{assigningEquipment ? "Asignando…" : "Asignar equipo"}</button>
+                </form>}
+              </section>
+
               <section className="project-detail-section">
                 <div className="project-detail-heading">
                   <div><Camera size={20} /><h3>Fotografías del proyecto</h3></div>
