@@ -484,6 +484,7 @@ function Dashboard({ session }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [selectedRequest, setSelectedRequest] = useState(null)
+  const [requestView, setRequestView] = useState("active")
   const [savingStatus, setSavingStatus] = useState(false)
   const [clients, setClients] = useState([])
   const [projects, setProjects] = useState([])
@@ -549,6 +550,9 @@ function Dashboard({ session }) {
   const upcomingProjects = projects.filter((project) => project.due_date && project.due_date >= today && project.due_date <= nextThirtyDays && openProjectStatuses.includes(project.status)).sort((a, b) => a.due_date.localeCompare(b.due_date))
   const upcomingMaintenance = equipment.filter((item) => item.next_maintenance_date && item.next_maintenance_date >= today && item.next_maintenance_date <= nextThirtyDays && item.status === "active").sort((a, b) => a.next_maintenance_date.localeCompare(b.next_maintenance_date))
   const myWorkOrders = workOrders.filter((order) => order.assigned_to === session.user.id && openWorkOrderStatuses.includes(order.status))
+  const activeRequests = requests.filter((request) => !["completed", "cancelled"].includes(request.status))
+  const finishedRequests = requests.filter((request) => ["completed", "cancelled"].includes(request.status))
+  const visibleRequests = requestView === "finished" ? finishedRequests : activeRequests
 
   const openProject = async (project) => {
     setSelectedProject(project)
@@ -1211,7 +1215,7 @@ function Dashboard({ session }) {
             <article><CalendarDays size={22} /><div><strong>{upcomingProjects.length}</strong><span>Entregas en 30 días</span></div></article>
             <article><Wrench size={22} /><div><strong>{upcomingMaintenance.length}</strong><span>Mantenimientos próximos</span></div></article>
           </> : activeModule === "requests" ? <>
-            <article><ClipboardList size={22} /><div><strong>{requests.length}</strong><span>Solicitudes visibles</span></div></article>
+            <article><ClipboardList size={22} /><div><strong>{activeRequests.length}</strong><span>Pendientes</span></div></article>
             <article><Mail size={22} /><div><strong>{requests.filter((item) => item.status === "lead").length}</strong><span>Nuevas</span></div></article>
           </> : activeModule === "clients" ? <>
             <article><Users size={22} /><div><strong>{clients.length}</strong><span>Clientes registrados</span></div></article>
@@ -1233,6 +1237,11 @@ function Dashboard({ session }) {
 
         {error && <div className="internal-alert" role="alert">{error}</div>}
 
+        {activeModule === "requests" && <div className="request-view-tabs" role="tablist" aria-label="Vista de solicitudes">
+          <button type="button" role="tab" aria-selected={requestView === "active"} className={requestView === "active" ? "active" : ""} onClick={() => setRequestView("active")}>Pendientes <span>{activeRequests.length}</span></button>
+          <button type="button" role="tab" aria-selected={requestView === "finished"} className={requestView === "finished" ? "active" : ""} onClick={() => setRequestView("finished")}>Finalizadas <span>{finishedRequests.length}</span></button>
+        </div>}
+
         {activeModule === "users" ? <InternalUsers session={session} /> : activeModule === "dashboard" ? <div className="dashboard-panels">
           <section className="dashboard-panel dashboard-panel-wide">
             <div className="dashboard-panel-heading"><div><ClipboardList size={20} /><h2>Mis órdenes pendientes</h2></div><button type="button" onClick={() => setActiveModule("workOrders")}>Ver todas</button></div>
@@ -1250,14 +1259,14 @@ function Dashboard({ session }) {
         </div> : <div className="internal-table-card">
           {loading ? (
             <div className="internal-empty">Cargando información…</div>
-          ) : activeModule === "requests" ? (requests.length === 0 ? (
-            <div className="internal-empty">Todavía no hay solicitudes registradas.</div>
+          ) : activeModule === "requests" ? (visibleRequests.length === 0 ? (
+            <div className="internal-empty">{requestView === "finished" ? "Todavía no hay solicitudes finalizadas." : "No hay solicitudes pendientes."}</div>
           ) : (
             <div className="internal-table-wrap">
               <table>
                 <thead><tr><th>Folio</th><th>Cliente</th><th>Servicio</th><th>Estado</th><th>Recibida</th></tr></thead>
                 <tbody>
-                  {requests.map((request) => (
+                  {visibleRequests.map((request) => (
                     <tr key={request.id} className="internal-clickable-row" onClick={() => setSelectedRequest(request)}>
                       <td><strong>{request.request_code}</strong></td>
                       <td className="internal-stacked-cell"><strong>{request.requester_name}</strong><span>{request.company_name || request.email}</span></td>
