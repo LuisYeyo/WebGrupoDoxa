@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Bell, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileText, Lightbulb, LogOut, Mail, Menu, Pencil, Plus, RefreshCw, Search, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
+import { AlertTriangle, Bell, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileText, History, Lightbulb, LogOut, Mail, Menu, Pencil, Plus, RefreshCw, Search, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -58,6 +58,23 @@ const DOCUMENT_CATEGORY_LABELS = {
   safety: "Seguridad",
   invoice: "Factura",
   other: "Otro",
+}
+
+const AUDIT_TABLE_LABELS = { clients: "Cliente", projects: "Proyecto", quote_requests: "Solicitud", work_orders: "Orden de trabajo", equipment: "Equipo", work_locations: "Ubicación" }
+const AUDIT_ACTION_LABELS = { INSERT: "Registró", UPDATE: "Actualizó", DELETE: "Eliminó" }
+const AUDIT_FIELD_LABELS = { status: "estado", name: "nombre", legal_name: "razón social", manager_id: "responsable", assigned_to: "asignación", due_date: "fecha de entrega", start_date: "fecha de inicio", location_id: "ubicación", amount: "monto", phone: "teléfono", email: "correo", notes: "notas", description: "descripción" }
+
+function auditRecordName(log) {
+  const data = log.new_data || log.old_data || {}
+  return data.name || data.title || data.legal_name || data.request_code || data.internal_code || data.code || "Registro"
+}
+
+function auditChangeSummary(log) {
+  if (log.action !== "UPDATE") return ""
+  const ignored = new Set(["updated_at", "created_at", "completed_at"])
+  const changed = Object.keys(log.new_data || {}).filter((key) => !ignored.has(key) && JSON.stringify(log.old_data?.[key]) !== JSON.stringify(log.new_data?.[key]))
+  if (changed.length === 0) return "Sin cambios visibles"
+  return `Cambió: ${changed.slice(0, 4).map((key) => AUDIT_FIELD_LABELS[key] || key.replaceAll("_", " ")).join(", ")}${changed.length > 4 ? "…" : ""}`
 }
 
 function formatDate(value) {
@@ -505,6 +522,9 @@ function Dashboard({ session }) {
   const [workOrders, setWorkOrders] = useState([])
   const [editingWorkOrder, setEditingWorkOrder] = useState(null)
   const [team, setTeam] = useState([])
+  const [auditLogs, setAuditLogs] = useState([])
+  const [loadingAudit, setLoadingAudit] = useState(false)
+  const [auditError, setAuditError] = useState("")
   const [selectedProject, setSelectedProject] = useState(null)
   const [editingProject, setEditingProject] = useState(false)
   const [projectLessons, setProjectLessons] = useState([])
@@ -1334,6 +1354,26 @@ function Dashboard({ session }) {
     return () => window.clearTimeout(timeout)
   }, [loadData])
 
+  const loadAuditLogs = useCallback(async () => {
+    setLoadingAudit(true)
+    setAuditError("")
+    const { data, error: loadError } = await supabase.from("audit_logs")
+      .select("id, table_name, record_id, action, old_data, new_data, created_at, profiles!audit_logs_actor_id_fkey(full_name)")
+      .order("created_at", { ascending: false }).limit(200)
+    if (loadError) {
+      setAuditError("Falta ejecutar la migración del historial en Supabase.")
+    } else {
+      setAuditLogs(data || [])
+    }
+    setLoadingAudit(false)
+  }, [])
+
+  useEffect(() => {
+    if (activeModule !== "activity" || !["admin", "manager", "supervisor"].includes(profile?.role)) return
+    const timeout = window.setTimeout(loadAuditLogs, 0)
+    return () => window.clearTimeout(timeout)
+  }, [activeModule, loadAuditLogs, profile?.role])
+
   useEffect(() => {
     const captureInstallPrompt = (event) => {
       event.preventDefault()
@@ -1397,6 +1437,7 @@ function Dashboard({ session }) {
         <button type="button" className={activeModule === "locations" ? "active" : ""} onClick={() => setActiveModule("locations")}>Talleres y ubicaciones</button>
         <button type="button" className={activeModule === "equipment" ? "active" : ""} onClick={() => setActiveModule("equipment")}>Maquinaria y equipo</button>
         <button type="button" className={activeModule === "workOrders" ? "active" : ""} onClick={() => setActiveModule("workOrders")}>Órdenes de trabajo</button>
+        {["admin", "manager", "supervisor"].includes(profile?.role) && <button type="button" className={activeModule === "activity" ? "active" : ""} onClick={() => setActiveModule("activity")}>Actividad</button>}
         {profile?.role === "admin" && <button type="button" className={activeModule === "users" ? "active" : ""} onClick={() => setActiveModule("users")}>Personal</button>}
         <button type="button" className={activeModule === "projects" ? "active" : ""} onClick={() => setActiveModule("projects")}>Proyectos</button>
       </nav>
@@ -1405,10 +1446,10 @@ function Dashboard({ session }) {
         <button type="button" className={activeModule === "dashboard" ? "active" : ""} onClick={() => openModule("dashboard")}><Building2 size={20} /><span>Inicio</span></button>
         <button type="button" className={activeModule === "workOrders" ? "active" : ""} onClick={() => openModule("workOrders")}><ClipboardList size={20} /><span>Órdenes</span></button>
         <button type="button" className={activeModule === "projects" ? "active" : ""} onClick={() => openModule("projects")}><FileText size={20} /><span>Proyectos</span></button>
-        <button type="button" className={showMobileMenu || ["requests", "clients", "locations", "equipment", "users"].includes(activeModule) ? "active" : ""} onClick={() => setShowMobileMenu(true)}><Menu size={20} /><span>Más</span></button>
+        <button type="button" className={showMobileMenu || ["requests", "clients", "locations", "equipment", "activity", "users"].includes(activeModule) ? "active" : ""} onClick={() => setShowMobileMenu(true)}><Menu size={20} /><span>Más</span></button>
       </nav>
 
-      {showMobileMenu && <div className="internal-mobile-menu-backdrop" onClick={() => setShowMobileMenu(false)}><section className="internal-mobile-menu" onClick={(event) => event.stopPropagation()} aria-label="Más módulos"><div className="internal-mobile-menu-heading"><strong>Más módulos</strong><button type="button" onClick={() => setShowMobileMenu(false)} aria-label="Cerrar"><X size={20} /></button></div><button type="button" onClick={() => openModule("requests")}><Mail size={19} /> Solicitudes</button><button type="button" onClick={() => openModule("clients")}><Users size={19} /> Clientes</button><button type="button" onClick={() => openModule("locations")}><Building2 size={19} /> Talleres y ubicaciones</button><button type="button" onClick={() => openModule("equipment")}><Wrench size={19} /> Maquinaria y equipo</button>{profile?.role === "admin" && <button type="button" onClick={() => openModule("users")}><ShieldCheck size={19} /> Personal</button>}</section></div>}
+      {showMobileMenu && <div className="internal-mobile-menu-backdrop" onClick={() => setShowMobileMenu(false)}><section className="internal-mobile-menu" onClick={(event) => event.stopPropagation()} aria-label="Más módulos"><div className="internal-mobile-menu-heading"><strong>Más módulos</strong><button type="button" onClick={() => setShowMobileMenu(false)} aria-label="Cerrar"><X size={20} /></button></div><button type="button" onClick={() => openModule("requests")}><Mail size={19} /> Solicitudes</button><button type="button" onClick={() => openModule("clients")}><Users size={19} /> Clientes</button><button type="button" onClick={() => openModule("locations")}><Building2 size={19} /> Talleres y ubicaciones</button><button type="button" onClick={() => openModule("equipment")}><Wrench size={19} /> Maquinaria y equipo</button>{["admin", "manager", "supervisor"].includes(profile?.role) && <button type="button" onClick={() => openModule("activity")}><History size={19} /> Actividad</button>}{profile?.role === "admin" && <button type="button" onClick={() => openModule("users")}><ShieldCheck size={19} /> Personal</button>}</section></div>}
 
       {showNotifications && <div className="internal-drawer-backdrop" onClick={() => setShowNotifications(false)}><aside className="internal-drawer internal-notification-drawer" onClick={(event) => event.stopPropagation()} aria-label="Centro de avisos"><button type="button" className="internal-drawer-close" onClick={() => setShowNotifications(false)} aria-label="Cerrar"><X size={20} /></button><p className="internal-eyebrow">SEGUIMIENTO</p><h2>Avisos</h2><p className="internal-drawer-company">Pendientes que requieren tu atención.</p><div className="internal-notification-list">
         {myOverdueOrders.map((order) => <button type="button" key={`overdue-${order.id}`} onClick={() => { setSearchTerm(order.code); setListStatus("all"); setActiveModule("workOrders"); setShowNotifications(false) }}><AlertTriangle size={19} /><div><strong>Orden vencida</strong><span>{order.title} · venció {order.due_date}</span></div><ChevronRight size={17} /></button>)}
@@ -1424,12 +1465,16 @@ function Dashboard({ session }) {
         <div className="internal-heading-row">
           <div>
             <p className="internal-eyebrow">{activeModule === "dashboard" ? "RESUMEN OPERATIVO" : activeModule === "requests" ? "SOLICITUDES" : activeModule === "clients" ? "DIRECTORIO" : ["locations", "equipment", "workOrders", "projects"].includes(activeModule) ? "OPERACIONES" : "ADMINISTRACIÓN"}</p>
-            <h1>{activeModule === "dashboard" ? `Hola, ${profile?.full_name?.split(" ")[0] || "equipo"}` : activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : activeModule === "locations" ? "Talleres y ubicaciones" : activeModule === "equipment" ? "Maquinaria y equipo" : activeModule === "workOrders" ? "Órdenes de trabajo" : activeModule === "projects" ? "Proyectos y trabajos" : "Personal"}</h1>
-            <p>{activeModule === "dashboard" ? "Revisa el trabajo pendiente, las entregas y el mantenimiento próximo." : activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "locations" ? "Talleres del grupo, instalaciones de clientes y sitios externos de trabajo." : activeModule === "equipment" ? "Inventario, ubicación y disponibilidad de los equipos operativos." : activeModule === "workOrders" ? "Actividades asignadas al personal para ejecutar cada proyecto." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : "Invitaciones, roles y acceso al sistema interno."}</p>
+            <h1>{activeModule === "dashboard" ? `Hola, ${profile?.full_name?.split(" ")[0] || "equipo"}` : activeModule === "requests" ? "Solicitudes de cotización" : activeModule === "clients" ? "Clientes" : activeModule === "locations" ? "Talleres y ubicaciones" : activeModule === "equipment" ? "Maquinaria y equipo" : activeModule === "workOrders" ? "Órdenes de trabajo" : activeModule === "projects" ? "Proyectos y trabajos" : activeModule === "activity" ? "Historial de actividad" : "Personal"}</h1>
+            <p>{activeModule === "dashboard" ? "Revisa el trabajo pendiente, las entregas y el mantenimiento próximo." : activeModule === "requests" ? "Información recibida desde el formulario del sitio web." : activeModule === "clients" ? "Empresas y personas para las que se realizan trabajos." : activeModule === "locations" ? "Talleres del grupo, instalaciones de clientes y sitios externos de trabajo." : activeModule === "equipment" ? "Inventario, ubicación y disponibilidad de los equipos operativos." : activeModule === "workOrders" ? "Actividades asignadas al personal para ejecutar cada proyecto." : activeModule === "projects" ? "Servicios registrados para cada cliente y su seguimiento." : activeModule === "activity" ? "Consulta quién registró, modificó o eliminó información del sistema." : "Invitaciones, roles y acceso al sistema interno."}</p>
           </div>
           {["dashboard", "requests"].includes(activeModule) ? (
             <button type="button" className="internal-refresh" onClick={loadData} disabled={loading}>
               <RefreshCw size={17} className={loading ? "spin" : ""} /> Actualizar
+            </button>
+          ) : activeModule === "activity" ? (
+            <button type="button" className="internal-refresh" onClick={loadAuditLogs} disabled={loadingAudit}>
+              <RefreshCw size={17} className={loadingAudit ? "spin" : ""} /> Actualizar
             </button>
           ) : activeModule === "clients" && ["admin", "manager", "supervisor"].includes(profile?.role) ? (
             <button type="button" className="internal-primary-action" onClick={() => setShowClientForm(true)}>
@@ -1450,7 +1495,7 @@ function Dashboard({ session }) {
           ) : null}
         </div>
 
-        {activeModule !== "users" && <div className="internal-summary-grid">
+        {!["users", "activity"].includes(activeModule) && <div className="internal-summary-grid">
           {activeModule === "dashboard" ? <>
             <article><ClipboardList size={22} /><div><strong>{activeProjects.length}</strong><span>Proyectos activos</span></div></article>
             <article><AlertTriangle size={22} /><div><strong>{overdueWorkOrders.length}</strong><span>Órdenes vencidas</span></div></article>
@@ -1484,12 +1529,14 @@ function Dashboard({ session }) {
           <button type="button" role="tab" aria-selected={requestView === "finished"} className={requestView === "finished" ? "active" : ""} onClick={() => setRequestView("finished")}>Finalizadas <span>{finishedRequests.length}</span></button>
         </div>}
 
-        {!["dashboard", "users"].includes(activeModule) && <div className="internal-list-toolbar">
+        {!["dashboard", "users", "activity"].includes(activeModule) && <div className="internal-list-toolbar">
           <label className="internal-search-field"><Search size={17} /><span className="sr-only">Buscar</span><input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder={activeModule === "requests" ? "Buscar por folio, cliente o servicio" : activeModule === "clients" ? "Buscar por empresa, RFC o contacto" : activeModule === "locations" ? "Buscar taller o ubicación" : activeModule === "equipment" ? "Buscar código, equipo, marca o serie" : activeModule === "workOrders" ? "Buscar orden, proyecto o responsable" : "Buscar proyecto, cliente o servicio"} /></label>
           {statusFilterOptions && <select aria-label="Filtrar por estado" value={Object.hasOwn(statusFilterOptions, listStatus) ? listStatus : "all"} onChange={(event) => setListStatus(event.target.value)}><option value="all">Todos los estados</option>{Object.entries(statusFilterOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>}
         </div>}
 
-        {activeModule === "users" ? <InternalUsers session={session} /> : activeModule === "dashboard" ? <div className="dashboard-panels">
+        {activeModule === "users" ? <InternalUsers session={session} /> : activeModule === "activity" ? <div className="audit-log-card">
+          {loadingAudit ? <div className="internal-empty">Cargando actividad…</div> : auditError ? <div className="internal-alert" role="alert">{auditError}</div> : auditLogs.length === 0 ? <div className="internal-empty">El historial comenzará a llenarse con los próximos cambios.</div> : <div className="audit-log-list">{auditLogs.map((log) => <article key={log.id}><div className={`audit-log-icon audit-${log.action.toLowerCase()}`}>{log.action === "INSERT" ? <Plus size={17} /> : log.action === "DELETE" ? <X size={17} /> : <Pencil size={17} />}</div><div><div className="audit-log-heading"><strong>{AUDIT_ACTION_LABELS[log.action]} {AUDIT_TABLE_LABELS[log.table_name] || log.table_name}</strong><time>{formatDate(log.created_at)}</time></div><p>{auditRecordName(log)}</p>{auditChangeSummary(log) && <span>{auditChangeSummary(log)}</span>}<small>{log.profiles?.full_name || "Sistema o formulario público"}</small></div></article>)}</div>}
+        </div> : activeModule === "dashboard" ? <div className="dashboard-panels">
           <section className="dashboard-panel dashboard-panel-wide">
             <div className="dashboard-panel-heading"><div><Building2 size={20} /><h2>Proyectos a mi cargo</h2></div><button type="button" onClick={() => setActiveModule("projects")}>Ver proyectos</button></div>
             {myProjects.length === 0 ? <p className="dashboard-empty">No tienes proyectos activos asignados como responsable.</p> : <div className="dashboard-list">{myProjects.slice(0, 6).map((project) => <article key={project.id} className="dashboard-clickable-card" role="button" tabIndex="0" onClick={() => openProject(project)} onKeyDown={(event) => { if (["Enter", " "].includes(event.key)) openProject(project) }}><div><strong>{project.name}</strong><span>{project.clients?.legal_name || "Sin cliente"} · {project.code}</span></div><div><span className={`internal-status status-${project.status}`}>{STATUS_LABELS[project.status]}</span><small>{project.due_date ? `Entrega ${project.due_date}` : "Sin fecha de entrega"}</small></div></article>)}</div>}
