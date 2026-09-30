@@ -576,6 +576,7 @@ function Dashboard({ session }) {
   const operativeProjectOrders = selectedProjectOrders.filter((order) => order.status !== "cancelled")
   const completedProjectOrders = operativeProjectOrders.filter((order) => order.status === "completed").length
   const projectProgress = operativeProjectOrders.length ? Math.round((completedProjectOrders / operativeProjectOrders.length) * 100) : 0
+  const canCompleteSelectedProject = operativeProjectOrders.length > 0 && completedProjectOrders === operativeProjectOrders.length
 
   const statusFilterOptions = activeModule === "requests" ? STATUS_LABELS
     : activeModule === "clients" || activeModule === "locations" || activeModule === "equipment" ? RECORD_STATUS_LABELS
@@ -792,7 +793,7 @@ function Dashboard({ session }) {
         .select("id, legal_name, trade_name, tax_id, email, phone, notes, status, created_at")
         .order("legal_name"),
       supabase.from("projects")
-        .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)")
+        .select("id, code, name, service, description, amount, currency, status, start_date, due_date, completed_at, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)")
         .order("created_at", { ascending: false }),
       supabase.from("work_locations")
         .select("id, client_id, company_name, name, kind, workshop_number, address_line, city, state, postal_code, notes, status, clients(legal_name)")
@@ -903,7 +904,7 @@ function Dashboard({ session }) {
       currency: conversionForm.currency,
       status: "approved",
       created_by: session.user.id,
-    }).select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)").single()
+    }).select("id, code, name, service, description, amount, currency, status, start_date, due_date, completed_at, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)").single()
 
     if (projectError) {
       setError("El cliente quedó registrado, pero no fue posible crear el proyecto.")
@@ -1002,7 +1003,7 @@ function Dashboard({ session }) {
         due_date: projectForm.due_date || null,
         created_by: session.user.id,
       })
-      .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)")
+      .select("id, code, name, service, description, amount, currency, status, start_date, due_date, completed_at, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)")
       .single()
 
     if (insertError) {
@@ -1021,6 +1022,7 @@ function Dashboard({ session }) {
 
     setSavingProject(true)
     setError("")
+    const completedAt = projectEditForm.status === "completed" ? (selectedProject.completed_at || new Date().toISOString()) : null
     const { data, error: updateError } = await supabase.from("projects").update({
       location_id: projectEditForm.location_id || null,
       manager_id: projectEditForm.manager_id || null,
@@ -1032,8 +1034,9 @@ function Dashboard({ session }) {
       status: projectEditForm.status,
       start_date: projectEditForm.start_date || null,
       due_date: projectEditForm.due_date || null,
+      completed_at: completedAt,
     }).eq("id", selectedProject.id)
-      .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)")
+      .select("id, code, name, service, description, amount, currency, status, start_date, due_date, completed_at, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)")
       .single()
 
     if (updateError) {
@@ -1042,6 +1045,40 @@ function Dashboard({ session }) {
       setProjects((current) => current.map((project) => project.id === data.id ? data : project))
       setSelectedProject(data)
       setEditingProject(false)
+      if (data.status === "completed" && ["admin", "manager", "supervisor"].includes(profile?.role)) {
+        const { error: requestError } = await supabase.from("quote_requests").update({ status: "completed" }).eq("project_id", data.id)
+        if (!requestError) setRequests((current) => current.map((request) => request.project_id === data.id ? { ...request, status: "completed" } : request))
+      }
+    }
+    setSavingProject(false)
+  }
+
+  const completeProject = async () => {
+    if (!selectedProject || !canEditOperations || !canCompleteSelectedProject) return
+
+    setSavingProject(true)
+    setError("")
+    const completedAt = new Date().toISOString()
+    const { data, error: updateError } = await supabase.from("projects").update({ status: "completed", completed_at: completedAt }).eq("id", selectedProject.id)
+      .select("id, code, name, service, description, amount, currency, status, start_date, due_date, completed_at, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)")
+      .single()
+
+    if (updateError) {
+      setError("No fue posible finalizar el proyecto.")
+      setSavingProject(false)
+      return
+    }
+
+    setProjects((current) => current.map((project) => project.id === data.id ? data : project))
+    setSelectedProject(data)
+
+    if (["admin", "manager", "supervisor"].includes(profile?.role)) {
+      const { error: requestError } = await supabase.from("quote_requests").update({ status: "completed" }).eq("project_id", data.id)
+      if (requestError) {
+        setError("El proyecto se finalizó, pero la solicitud vinculada no pudo actualizarse.")
+      } else {
+        setRequests((current) => current.map((request) => request.project_id === data.id ? { ...request, status: "completed" } : request))
+      }
     }
     setSavingProject(false)
   }
@@ -1598,7 +1635,7 @@ function Dashboard({ session }) {
               </div>
               <label htmlFor="project-status">Estado</label>
               <select id="project-status" value={projectForm.status} onChange={(event) => setProjectForm({ ...projectForm, status: event.target.value })}>
-                {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                {Object.entries(STATUS_LABELS).filter(([value]) => value !== "completed").map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
               <div className="internal-form-columns">
                 <div><label htmlFor="project-start">Fecha de inicio</label><input id="project-start" type="date" value={projectForm.start_date} onChange={(event) => setProjectForm({ ...projectForm, start_date: event.target.value })} /></div>
@@ -1810,7 +1847,7 @@ function Dashboard({ session }) {
                 <div><label htmlFor="edit-project-currency">Moneda</label><select id="edit-project-currency" value={projectEditForm.currency} onChange={(event) => setProjectEditForm({ ...projectEditForm, currency: event.target.value })}><option value="MXN">MXN — Pesos</option><option value="USD">USD — Dólares</option></select></div>
               </div>
               <label htmlFor="edit-project-status">Estado</label>
-              <select id="edit-project-status" value={projectEditForm.status} onChange={(event) => setProjectEditForm({ ...projectEditForm, status: event.target.value })}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+              <select id="edit-project-status" value={projectEditForm.status} onChange={(event) => setProjectEditForm({ ...projectEditForm, status: event.target.value })}>{Object.entries(STATUS_LABELS).filter(([value]) => value !== "completed" || canCompleteSelectedProject || selectedProject.status === "completed").map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
               <div className="internal-form-columns">
                 <div><label htmlFor="edit-project-start">Inicio</label><input id="edit-project-start" type="date" value={projectEditForm.start_date} onChange={(event) => setProjectEditForm({ ...projectEditForm, start_date: event.target.value })} /></div>
                 <div><label htmlFor="edit-project-due">Entrega</label><input id="edit-project-due" type="date" min={projectEditForm.start_date || undefined} value={projectEditForm.due_date} onChange={(event) => setProjectEditForm({ ...projectEditForm, due_date: event.target.value })} /></div>
@@ -1826,6 +1863,7 @@ function Dashboard({ session }) {
               <div><dt>Ubicación</dt><dd>{selectedProject.work_locations?.name || "Por definir"}</dd></div>
               <div><dt>Inicio</dt><dd>{selectedProject.start_date || "Por definir"}</dd></div>
               <div><dt>Entrega</dt><dd>{selectedProject.due_date || "Por definir"}</dd></div>
+              {selectedProject.completed_at && <div><dt>Finalizado</dt><dd>{formatDate(selectedProject.completed_at)}</dd></div>}
             </dl>}
 
             <section className="project-progress-card" aria-label="Avance de órdenes de trabajo">
@@ -1837,6 +1875,7 @@ function Dashboard({ session }) {
                 <span><strong>{operativeProjectOrders.filter((order) => ["pending", "scheduled"].includes(order.status)).length}</strong> pendientes</span>
                 <span><strong>{operativeProjectOrders.filter((order) => ["in_progress", "blocked"].includes(order.status)).length}</strong> activas</span>
               </div>
+              {selectedProject.status === "completed" ? <div className="project-completion-note"><Check size={17} /> Proyecto finalizado</div> : canCompleteSelectedProject ? <button type="button" className="project-complete-button" onClick={completeProject} disabled={savingProject}><Check size={17} /> {savingProject ? "Finalizando…" : "Finalizar proyecto"}</button> : operativeProjectOrders.length > 0 ? <p className="project-completion-hint">Termina todas las órdenes para poder cerrar el proyecto.</p> : null}
             </section>
 
             {loadingProject ? <div className="internal-empty">Cargando expediente…</div> : <>
