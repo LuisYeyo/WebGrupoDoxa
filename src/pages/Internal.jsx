@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileText, Lightbulb, LogOut, Mail, Menu, Pencil, Plus, RefreshCw, Search, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
+import { AlertTriangle, Bell, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileText, Lightbulb, LogOut, Mail, Menu, Pencil, Plus, RefreshCw, Search, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -484,6 +484,7 @@ function Dashboard({ session }) {
   const [installPrompt, setInstallPrompt] = useState(null)
   const [showInstallHelp, setShowInstallHelp] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
   const [isInstalled, setIsInstalled] = useState(() => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true)
   const [profile, setProfile] = useState(null)
   const [requests, setRequests] = useState([])
@@ -555,6 +556,7 @@ function Dashboard({ session }) {
   const canEditOperations = ["admin", "manager", "supervisor", "staff"].includes(profile?.role)
   const today = dashboardDate.toISOString().slice(0, 10)
   const nextThirtyDays = new Date(dashboardDate.getTime() + 30 * 86400000).toISOString().slice(0, 10)
+  const nextSevenDays = new Date(dashboardDate.getTime() + 7 * 86400000).toISOString().slice(0, 10)
   const openProjectStatuses = ["lead", "quoted", "approved", "in_progress", "on_hold"]
   const openWorkOrderStatuses = ["pending", "scheduled", "in_progress", "blocked"]
   const activeProjects = projects.filter((project) => openProjectStatuses.includes(project.status))
@@ -563,6 +565,11 @@ function Dashboard({ session }) {
   const upcomingMaintenance = equipment.filter((item) => item.next_maintenance_date && item.next_maintenance_date >= today && item.next_maintenance_date <= nextThirtyDays && item.status === "active").sort((a, b) => a.next_maintenance_date.localeCompare(b.next_maintenance_date))
   const myProjects = activeProjects.filter((project) => project.manager?.id === session.user.id).sort((a, b) => (a.due_date || "9999-12-31").localeCompare(b.due_date || "9999-12-31"))
   const myWorkOrders = workOrders.filter((order) => order.assigned_to === session.user.id && openWorkOrderStatuses.includes(order.status))
+  const myOverdueOrders = myWorkOrders.filter((order) => order.due_date && order.due_date < today)
+  const myUpcomingOrders = myWorkOrders.filter((order) => order.due_date && order.due_date >= today && order.due_date <= nextSevenDays)
+  const myUpcomingProjectDeliveries = myProjects.filter((project) => project.due_date && project.due_date >= today && project.due_date <= nextSevenDays)
+  const newRequestAlerts = ["admin", "manager", "supervisor"].includes(profile?.role) ? requests.filter((request) => request.status === "lead") : []
+  const notificationCount = myOverdueOrders.length + myUpcomingOrders.length + myUpcomingProjectDeliveries.length + newRequestAlerts.length
   const activeRequests = requests.filter((request) => !["completed", "cancelled"].includes(request.status))
   const finishedRequests = requests.filter((request) => ["completed", "cancelled"].includes(request.status))
   const normalizedSearch = searchTerm.trim().toLocaleLowerCase("es-MX")
@@ -1370,6 +1377,7 @@ function Dashboard({ session }) {
         </div>
 
         <div className="internal-user-actions">
+          <button type="button" className="internal-icon-button internal-notification-button" onClick={() => setShowNotifications(true)} title="Avisos" aria-label={`Avisos${notificationCount ? `: ${notificationCount} pendientes` : ""}`}><Bell size={19} />{notificationCount > 0 && <span>{notificationCount > 99 ? "99+" : notificationCount}</span>}</button>
           {!isInstalled && <button type="button" className="internal-install-button" onClick={installApp}><Download size={17} /><span>Instalar app</span></button>}
           <div className="internal-user-copy">
             <strong>{profile?.full_name || session.user.email}</strong>
@@ -1401,6 +1409,14 @@ function Dashboard({ session }) {
       </nav>
 
       {showMobileMenu && <div className="internal-mobile-menu-backdrop" onClick={() => setShowMobileMenu(false)}><section className="internal-mobile-menu" onClick={(event) => event.stopPropagation()} aria-label="Más módulos"><div className="internal-mobile-menu-heading"><strong>Más módulos</strong><button type="button" onClick={() => setShowMobileMenu(false)} aria-label="Cerrar"><X size={20} /></button></div><button type="button" onClick={() => openModule("requests")}><Mail size={19} /> Solicitudes</button><button type="button" onClick={() => openModule("clients")}><Users size={19} /> Clientes</button><button type="button" onClick={() => openModule("locations")}><Building2 size={19} /> Talleres y ubicaciones</button><button type="button" onClick={() => openModule("equipment")}><Wrench size={19} /> Maquinaria y equipo</button>{profile?.role === "admin" && <button type="button" onClick={() => openModule("users")}><ShieldCheck size={19} /> Personal</button>}</section></div>}
+
+      {showNotifications && <div className="internal-drawer-backdrop" onClick={() => setShowNotifications(false)}><aside className="internal-drawer internal-notification-drawer" onClick={(event) => event.stopPropagation()} aria-label="Centro de avisos"><button type="button" className="internal-drawer-close" onClick={() => setShowNotifications(false)} aria-label="Cerrar"><X size={20} /></button><p className="internal-eyebrow">SEGUIMIENTO</p><h2>Avisos</h2><p className="internal-drawer-company">Pendientes que requieren tu atención.</p><div className="internal-notification-list">
+        {myOverdueOrders.map((order) => <button type="button" key={`overdue-${order.id}`} onClick={() => { setSearchTerm(order.code); setListStatus("all"); setActiveModule("workOrders"); setShowNotifications(false) }}><AlertTriangle size={19} /><div><strong>Orden vencida</strong><span>{order.title} · venció {order.due_date}</span></div><ChevronRight size={17} /></button>)}
+        {myUpcomingOrders.map((order) => <button type="button" key={`order-${order.id}`} onClick={() => { setSearchTerm(order.code); setListStatus("all"); setActiveModule("workOrders"); setShowNotifications(false) }}><CalendarDays size={19} /><div><strong>Entrega próxima</strong><span>{order.title} · {order.due_date}</span></div><ChevronRight size={17} /></button>)}
+        {myUpcomingProjectDeliveries.map((project) => <button type="button" key={`project-${project.id}`} onClick={() => { setShowNotifications(false); openProject(project) }}><Building2 size={19} /><div><strong>Proyecto por entregar</strong><span>{project.name} · {project.due_date}</span></div><ChevronRight size={17} /></button>)}
+        {newRequestAlerts.slice(0, 8).map((request) => <button type="button" key={`request-${request.id}`} onClick={() => { setSelectedRequest(request); setConvertingRequest(false); setShowNotifications(false) }}><Mail size={19} /><div><strong>Nueva solicitud</strong><span>{request.requester_name} · {request.service}</span></div><ChevronRight size={17} /></button>)}
+        {notificationCount === 0 && <div className="internal-notification-empty"><Check size={24} /><strong>Todo al día</strong><span>No tienes avisos pendientes.</span></div>}
+      </div></aside></div>}
 
       {showInstallHelp && <div className="internal-drawer-backdrop" onClick={() => setShowInstallHelp(false)}><aside className="internal-drawer internal-install-drawer" onClick={(event) => event.stopPropagation()} aria-label="Instalar DOXA Interno"><button type="button" className="internal-drawer-close" onClick={() => setShowInstallHelp(false)} aria-label="Cerrar"><X size={20} /></button><div className="internal-brand-mark"><Building2 size={28} /></div><p className="internal-eyebrow">APP MÓVIL</p><h2>Instala DOXA Interno</h2><p className="internal-drawer-company">Quedará en tu pantalla de inicio y abrirá como una aplicación.</p><ol className="internal-install-steps"><li><strong>iPhone o iPad:</strong> abre esta página en Safari, pulsa Compartir y selecciona “Agregar a inicio”.</li><li><strong>Android:</strong> abre el menú de Chrome y elige “Instalar aplicación” o “Agregar a pantalla principal”.</li></ol></aside></div>}
 
