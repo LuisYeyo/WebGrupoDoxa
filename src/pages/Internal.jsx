@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Bell, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileDown, FileText, History, Lightbulb, LogOut, Mail, Menu, Pencil, Plus, Printer, RefreshCw, Search, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
+import { AlertTriangle, Bell, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileDown, FileText, History, Lightbulb, LogOut, Mail, Menu, Pencil, Plus, Printer, RefreshCw, Search, ShieldCheck, Trash2, Upload, Users, Wrench, X } from "lucide-react"
 import doxaLogo from "../assets/logos/Grupo industrial DOXA.png"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
@@ -541,6 +541,7 @@ function Dashboard({ session }) {
   const [savingLesson, setSavingLesson] = useState(false)
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const [savingPhotoId, setSavingPhotoId] = useState(null)
+  const [deletingPhotoId, setDeletingPhotoId] = useState(null)
   const [uploadingDocument, setUploadingDocument] = useState(false)
   const [activeModule, setActiveModule] = useState("dashboard")
   const [showClientForm, setShowClientForm] = useState(false)
@@ -677,7 +678,7 @@ function Dashboard({ session }) {
         .select("id, file_name, storage_path, description, created_at")
         .eq("project_id", project.id)
         .eq("category", "work_evidence")
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: true }),
       supabase.from("documents")
         .select("id, category, file_name, storage_path, description, mime_type, size_bytes, created_at, profiles!documents_uploaded_by_fkey(full_name)")
         .eq("project_id", project.id)
@@ -783,7 +784,7 @@ function Dashboard({ session }) {
       uploaded.push({ ...document, url: signedData?.signedUrl || "" })
     }
 
-    setProjectPhotos((current) => [...uploaded, ...current])
+    setProjectPhotos((current) => [...current, ...uploaded])
     setUploadingPhotos(false)
   }
 
@@ -799,6 +800,22 @@ function Dashboard({ session }) {
       setProjectPhotos((current) => current.map((item) => item.id === photo.id ? { ...item, description } : item))
     }
     setSavingPhotoId(null)
+  }
+
+  const deleteProjectPhoto = async (photo) => {
+    if (!["admin", "manager", "supervisor"].includes(profile?.role)) return
+    if (!window.confirm("¿Eliminar esta fotografía del proyecto? Esta acción no se puede deshacer.")) return
+    setDeletingPhotoId(photo.id)
+    setError("")
+    const { error: deleteError } = await supabase.from("documents").delete().eq("id", photo.id).eq("category", "work_evidence")
+    if (deleteError) {
+      setError("No fue posible eliminar la fotografía.")
+    } else {
+      setProjectPhotos((current) => current.filter((item) => item.id !== photo.id))
+      const { error: storageError } = await supabase.storage.from("project-media").remove([photo.storage_path])
+      if (storageError) setError("La fotografía se quitó del proyecto, pero el archivo requiere limpieza administrativa.")
+    }
+    setDeletingPhotoId(null)
   }
 
   const uploadProjectDocument = async (event) => {
@@ -2132,7 +2149,7 @@ function Dashboard({ session }) {
                   <div className="project-photo-grid">
                     {projectPhotos.map((photo) => <article key={photo.id}>
                       <a href={photo.url} target="_blank" rel="noreferrer" title={photo.file_name}><img src={photo.url} alt={photo.description || photo.file_name} loading="lazy" /></a>
-                      {canEditOperations ? <div className="project-photo-caption"><textarea rows="2" maxLength={500} value={photo.description || ""} onChange={(event) => setProjectPhotos((current) => current.map((item) => item.id === photo.id ? { ...item, description: event.target.value } : item))} placeholder="Describe la actividad mostrada…" /><button type="button" onClick={() => updatePhotoDescription(photo)} disabled={savingPhotoId === photo.id}>{savingPhotoId === photo.id ? "Guardando…" : "Guardar texto"}</button></div> : <p>{photo.description || "Sin descripción"}</p>}
+                      {canEditOperations ? <div className="project-photo-caption"><textarea rows="2" maxLength={500} value={photo.description || ""} onChange={(event) => setProjectPhotos((current) => current.map((item) => item.id === photo.id ? { ...item, description: event.target.value } : item))} placeholder="Describe la actividad mostrada…" /><div className="project-photo-caption-actions">{["admin", "manager", "supervisor"].includes(profile?.role) && <button type="button" className="project-photo-delete" onClick={() => deleteProjectPhoto(photo)} disabled={deletingPhotoId === photo.id}><Trash2 size={14} /> {deletingPhotoId === photo.id ? "Eliminando…" : "Eliminar"}</button>}<button type="button" onClick={() => updatePhotoDescription(photo)} disabled={savingPhotoId === photo.id}>{savingPhotoId === photo.id ? "Guardando…" : "Guardar texto"}</button></div></div> : <p>{photo.description || "Sin descripción"}</p>}
                     </article>)}
                   </div>
                 )}
