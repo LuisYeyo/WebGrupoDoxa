@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Building2, CalendarDays, Camera, Check, ClipboardList, Download, Eye, EyeOff, FileText, Lightbulb, LogOut, Mail, Pencil, Plus, RefreshCw, Search, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
+import { AlertTriangle, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileText, Lightbulb, LogOut, Mail, Pencil, Plus, RefreshCw, Search, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -780,7 +780,7 @@ function Dashboard({ session }) {
       supabase.from("profiles").select("full_name, role, active")
         .eq("id", session.user.id).single(),
       supabase.from("quote_requests")
-        .select("id, request_code, client_id, project_id, requester_name, company_name, email, phone, service, message, status, received_at")
+        .select("id, request_code, client_id, project_id, requester_name, company_name, email, phone, service, message, status, received_at, projects(id, code, name)")
         .order("received_at", { ascending: false }).limit(100),
       supabase.from("clients")
         .select("id, legal_name, trade_name, tax_id, email, phone, notes, status, created_at")
@@ -908,7 +908,7 @@ function Dashboard({ session }) {
     if (requestError) {
       setError("El proyecto se creó, pero la solicitud no pudo vincularse automáticamente.")
     } else {
-      const updatedRequest = { ...selectedRequest, client_id: clientId, project_id: project.id, status: "approved" }
+      const updatedRequest = { ...selectedRequest, client_id: clientId, project_id: project.id, status: "approved", projects: { id: project.id, code: project.code, name: project.name } }
       if (createdClient) setClients((current) => [...current, createdClient].sort((a, b) => a.legal_name.localeCompare(b.legal_name)))
       setProjects((current) => [project, ...current])
       setRequests((current) => current.map((request) => request.id === updatedRequest.id ? updatedRequest : request))
@@ -1772,6 +1772,8 @@ function Dashboard({ session }) {
 
             {canEditOperations && <button type="button" className="project-edit-button" onClick={() => setEditingProject((current) => !current)}><Pencil size={16} /> {editingProject ? "Cancelar edición" : "Editar proyecto"}</button>}
 
+            {requests.find((request) => request.project_id === selectedProject.id) && <div className="project-source-request"><span>Solicitud de origen</span><strong>{requests.find((request) => request.project_id === selectedProject.id).request_code}</strong></div>}
+
             {editingProject && projectEditForm && <form className="internal-form internal-client-form project-edit-form" onSubmit={updateProject}>
               <label htmlFor="edit-project-name">Nombre del trabajo *</label>
               <input id="edit-project-name" value={projectEditForm.name} onChange={(event) => setProjectEditForm({ ...projectEditForm, name: event.target.value })} required />
@@ -1964,6 +1966,7 @@ function Dashboard({ session }) {
 
             {["admin", "manager", "supervisor"].includes(profile?.role) && !selectedRequest.project_id && !convertingRequest && <button type="button" className="request-convert-button" onClick={beginRequestConversion}><Plus size={17} /> Crear cliente y proyecto</button>}
             {selectedRequest.project_id && <div className="internal-notice">Esta solicitud ya está vinculada con un proyecto.</div>}
+            {selectedRequest.projects && <button type="button" className="request-linked-project" onClick={() => { const project = projects.find((item) => item.id === selectedRequest.project_id); setSelectedRequest(null); setConvertingRequest(false); setActiveModule("projects"); if (project) openProject(project) }}><span>Proyecto vinculado</span><strong>{selectedRequest.projects.code} · {selectedRequest.projects.name}</strong><ChevronRight size={18} /></button>}
 
             {convertingRequest && <form className="internal-form internal-client-form request-conversion-form" onSubmit={convertRequestToProject}>
               <div className="request-conversion-heading"><h3>Convertir en proyecto</h3><button type="button" onClick={() => setConvertingRequest(false)}>Cancelar</button></div>
