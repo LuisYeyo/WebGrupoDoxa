@@ -557,6 +557,7 @@ function Dashboard({ session }) {
   const overdueWorkOrders = workOrders.filter((order) => order.due_date && order.due_date < today && openWorkOrderStatuses.includes(order.status))
   const upcomingProjects = projects.filter((project) => project.due_date && project.due_date >= today && project.due_date <= nextThirtyDays && openProjectStatuses.includes(project.status)).sort((a, b) => a.due_date.localeCompare(b.due_date))
   const upcomingMaintenance = equipment.filter((item) => item.next_maintenance_date && item.next_maintenance_date >= today && item.next_maintenance_date <= nextThirtyDays && item.status === "active").sort((a, b) => a.next_maintenance_date.localeCompare(b.next_maintenance_date))
+  const myProjects = activeProjects.filter((project) => project.manager?.id === session.user.id).sort((a, b) => (a.due_date || "9999-12-31").localeCompare(b.due_date || "9999-12-31"))
   const myWorkOrders = workOrders.filter((order) => order.assigned_to === session.user.id && openWorkOrderStatuses.includes(order.status))
   const activeRequests = requests.filter((request) => !["completed", "cancelled"].includes(request.status))
   const finishedRequests = requests.filter((request) => ["completed", "cancelled"].includes(request.status))
@@ -1386,6 +1387,10 @@ function Dashboard({ session }) {
         </div>}
 
         {activeModule === "users" ? <InternalUsers session={session} /> : activeModule === "dashboard" ? <div className="dashboard-panels">
+          <section className="dashboard-panel dashboard-panel-wide">
+            <div className="dashboard-panel-heading"><div><Building2 size={20} /><h2>Proyectos a mi cargo</h2></div><button type="button" onClick={() => setActiveModule("projects")}>Ver proyectos</button></div>
+            {myProjects.length === 0 ? <p className="dashboard-empty">No tienes proyectos activos asignados como responsable.</p> : <div className="dashboard-list">{myProjects.slice(0, 6).map((project) => <article key={project.id} className="dashboard-clickable-card" role="button" tabIndex="0" onClick={() => openProject(project)} onKeyDown={(event) => { if (["Enter", " "].includes(event.key)) openProject(project) }}><div><strong>{project.name}</strong><span>{project.clients?.legal_name || "Sin cliente"} · {project.code}</span></div><div><span className={`internal-status status-${project.status}`}>{STATUS_LABELS[project.status]}</span><small>{project.due_date ? `Entrega ${project.due_date}` : "Sin fecha de entrega"}</small></div></article>)}</div>}
+          </section>
           <section className="dashboard-panel dashboard-panel-wide">
             <div className="dashboard-panel-heading"><div><ClipboardList size={20} /><h2>Mis órdenes pendientes</h2></div><button type="button" onClick={() => setActiveModule("workOrders")}>Ver todas</button></div>
             {myWorkOrders.length === 0 ? <p className="dashboard-empty">No tienes órdenes pendientes asignadas.</p> : <div className="dashboard-list">{myWorkOrders.slice(0, 6).map((order) => <article key={order.id}><div><strong>{order.title}</strong><span>{order.projects?.name || "Proyecto"} · {order.code}</span></div><div><span className={`internal-status status-${order.status}`}>{WORK_ORDER_STATUS_LABELS[order.status]}</span><small>{order.due_date ? `Entrega ${order.due_date}` : "Sin fecha de entrega"}</small></div></article>)}</div>}
