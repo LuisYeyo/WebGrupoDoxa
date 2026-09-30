@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Bell, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileText, History, Lightbulb, LogOut, Mail, Menu, Pencil, Plus, RefreshCw, Search, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
+import { AlertTriangle, Bell, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileDown, FileText, History, Lightbulb, LogOut, Mail, Menu, Pencil, Plus, Printer, RefreshCw, Search, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
+import doxaLogo from "../assets/logos/Grupo industrial DOXA.png"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -88,6 +89,12 @@ function formatDate(value) {
 function formatMoney(value, currency = "MXN") {
   if (value === null || value === undefined || value === "") return "Por definir"
   return new Intl.NumberFormat("es-MX", { style: "currency", currency }).format(Number(value))
+}
+
+function csvCell(value) {
+  const text = String(value ?? "")
+  const safeText = /^[=+\-@]/.test(text) ? `'${text}` : text
+  return `"${safeText.replaceAll('"', '""')}"`
 }
 
 function createProjectCode() {
@@ -608,6 +615,29 @@ function Dashboard({ session }) {
   const completedProjectOrders = operativeProjectOrders.filter((order) => order.status === "completed").length
   const projectProgress = operativeProjectOrders.length ? Math.round((completedProjectOrders / operativeProjectOrders.length) * 100) : 0
   const canCompleteSelectedProject = operativeProjectOrders.length > 0 && completedProjectOrders === operativeProjectOrders.length
+
+  const exportWorkOrdersCsv = () => {
+    const headings = ["Folio", "Orden", "Proyecto", "Folio del proyecto", "Responsable", "Estado", "Programada", "Entrega"]
+    const rows = visibleWorkOrders.map((order) => [
+      order.code,
+      order.title,
+      order.projects?.name,
+      order.projects?.code,
+      order.profiles?.full_name || "Sin asignar",
+      WORK_ORDER_STATUS_LABELS[order.status] || order.status,
+      order.scheduled_date || "",
+      order.due_date || "",
+    ])
+    const csv = `\uFEFF${[headings, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")}`
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }))
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `ordenes-doxa-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
 
   const statusFilterOptions = activeModule === "requests" ? STATUS_LABELS
     : activeModule === "clients" || activeModule === "locations" || activeModule === "equipment" ? RECORD_STATUS_LABELS
@@ -1476,6 +1506,10 @@ function Dashboard({ session }) {
             <button type="button" className="internal-refresh" onClick={loadAuditLogs} disabled={loadingAudit}>
               <RefreshCw size={17} className={loadingAudit ? "spin" : ""} /> Actualizar
             </button>
+          ) : activeModule === "workOrders" ? (
+            <button type="button" className="internal-primary-action internal-export-action" onClick={exportWorkOrdersCsv} disabled={visibleWorkOrders.length === 0}>
+              <FileDown size={17} /> Exportar CSV
+            </button>
           ) : activeModule === "clients" && ["admin", "manager", "supervisor"].includes(profile?.role) ? (
             <button type="button" className="internal-primary-action" onClick={() => setShowClientForm(true)}>
               <Plus size={17} /> Nuevo cliente
@@ -1937,7 +1971,10 @@ function Dashboard({ session }) {
             <h2>{selectedProject.name}</h2>
             <p className="internal-drawer-company">{selectedProject.clients?.legal_name || "Cliente sin nombre"}</p>
 
-            {canEditOperations && <button type="button" className="project-edit-button" onClick={() => setEditingProject((current) => !current)}><Pencil size={16} /> {editingProject ? "Cancelar edición" : "Editar proyecto"}</button>}
+            <div className="project-drawer-actions">
+              {canEditOperations && <button type="button" className="project-edit-button" onClick={() => setEditingProject((current) => !current)}><Pencil size={16} /> {editingProject ? "Cancelar edición" : "Editar proyecto"}</button>}
+              <button type="button" className="project-edit-button project-print-button" onClick={() => window.print()} disabled={loadingProject}><Printer size={16} /> Imprimir reporte</button>
+            </div>
 
             {requests.find((request) => request.project_id === selectedProject.id) && <div className="project-source-request"><span>Solicitud de origen</span><strong>{requests.find((request) => request.project_id === selectedProject.id).request_code}</strong></div>}
 
@@ -2117,6 +2154,59 @@ function Dashboard({ session }) {
                 </form>}
               </section>
             </>}
+
+            {!loadingProject && <article className="project-print-report" aria-label="Reporte imprimible del proyecto">
+              <header className="project-print-header">
+                <img src={doxaLogo} alt="Grupo Industrial DOXA" />
+                <div><h1>Grupo Industrial DOXA</h1><p>Carretera Tampico Mante Km 27 #60, Col. Ampliación Melchor Ocampo<br />Altamira, Tamaulipas, C.P. 89602 · Tel. 833 328 59 35<br />grupoindustrialdoxa@gmail.com</p></div>
+              </header>
+              <section className="project-print-title">
+                <span>REPORTE DE ACTIVIDADES REALIZADAS</span>
+                <h2>{selectedProject.name}</h2>
+                <p>{selectedProject.description || selectedProject.service || "Reporte fotográfico y operativo del proyecto."}</p>
+              </section>
+              <dl className="project-print-facts">
+                <div><dt>Folio</dt><dd>{selectedProject.code}</dd></div>
+                <div><dt>Cliente</dt><dd>{selectedProject.clients?.legal_name || "Sin especificar"}</dd></div>
+                <div><dt>RFC</dt><dd>{selectedProject.clients?.tax_id || "Sin especificar"}</dd></div>
+                <div><dt>Servicio</dt><dd>{selectedProject.service || "Sin especificar"}</dd></div>
+                <div><dt>Responsable</dt><dd>{selectedProject.manager?.full_name || "Por asignar"}</dd></div>
+                <div><dt>Ubicación</dt><dd>{selectedProject.work_locations?.name || "Por definir"}</dd></div>
+                <div><dt>Periodo</dt><dd>{selectedProject.start_date || "Por definir"} a {selectedProject.due_date || "Por definir"}</dd></div>
+                <div><dt>Monto</dt><dd>{formatMoney(selectedProject.amount, selectedProject.currency)}</dd></div>
+                <div><dt>Estado</dt><dd>{STATUS_LABELS[selectedProject.status] || selectedProject.status}</dd></div>
+                <div><dt>Avance</dt><dd>{projectProgress}%</dd></div>
+              </dl>
+
+              <section className="project-print-section">
+                <h3>Actividades y órdenes de trabajo</h3>
+                {selectedProjectOrders.length === 0 ? <p>Sin órdenes registradas.</p> : selectedProjectOrders.map((order) => <div className="project-print-activity" key={`print-${order.id}`}>
+                  <div><strong>{order.title}</strong><span>{order.code} · {WORK_ORDER_STATUS_LABELS[order.status] || order.status}</span></div>
+                  {order.description && <p>{order.description}</p>}
+                  <small>Responsable: {order.profiles?.full_name || "Sin asignar"} · Programada: {order.scheduled_date || "por definir"} · Entrega: {order.due_date || "por definir"}</small>
+                </div>)}
+              </section>
+
+              {projectPhotos.length > 0 && <section className="project-print-section project-print-photo-section">
+                <h3>Reporte fotográfico</h3>
+                <div className="project-print-photo-grid">{projectPhotos.map((photo, index) => <figure key={`print-photo-${photo.id}`}>
+                  <img src={photo.url} alt={photo.description || photo.file_name} />
+                  <figcaption>{photo.description || `Evidencia fotográfica ${index + 1}`}<small>{formatDate(photo.created_at)}</small></figcaption>
+                </figure>)}</div>
+              </section>}
+
+              {projectEquipment.length > 0 && <section className="project-print-section">
+                <h3>Maquinaria y equipo utilizado</h3>
+                <table><thead><tr><th>Equipo</th><th>Uso</th><th>Periodo</th></tr></thead><tbody>{projectEquipment.map((item) => <tr key={`print-equipment-${item.equipment_id}`}><td>{item.equipment?.internal_code} · {item.equipment?.name}</td><td>{item.purpose || "Sin especificar"}</td><td>{item.planned_from || "Abierto"} a {item.planned_until || "abierto"}</td></tr>)}</tbody></table>
+              </section>}
+
+              {projectLessons.length > 0 && <section className="project-print-section">
+                <h3>Lecciones aprendidas</h3>
+                {projectLessons.map((item) => <div className="project-print-lesson" key={`print-lesson-${item.id}`}><strong>{item.title}</strong><p><b>Situación:</b> {item.situation}</p><p><b>Aprendizaje:</b> {item.lesson}</p></div>)}
+              </section>}
+
+              <footer className="project-print-footer"><span>GRUPO INDUSTRIAL DOXA</span><span>Generado el {new Intl.DateTimeFormat("es-MX", { dateStyle: "long" }).format(new Date())}</span></footer>
+            </article>}
           </aside>
         </div>
       )}
