@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileText, Lightbulb, LogOut, Mail, Pencil, Plus, RefreshCw, Search, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
+import { AlertTriangle, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileText, Lightbulb, LogOut, Mail, Menu, Pencil, Plus, RefreshCw, Search, ShieldCheck, Upload, Users, Wrench, X } from "lucide-react"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
 import "./Internal.css"
@@ -483,6 +483,7 @@ function Dashboard({ session }) {
   const [dashboardDate] = useState(() => new Date())
   const [installPrompt, setInstallPrompt] = useState(null)
   const [showInstallHelp, setShowInstallHelp] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [isInstalled, setIsInstalled] = useState(() => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true)
   const [profile, setProfile] = useState(null)
   const [requests, setRequests] = useState([])
@@ -1354,6 +1355,12 @@ function Dashboard({ session }) {
     setInstallPrompt(null)
   }
 
+  const openModule = (module) => {
+    setActiveModule(module)
+    setShowMobileMenu(false)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
   return (
     <main className="internal-dashboard">
       <header className="internal-topbar">
@@ -1385,6 +1392,15 @@ function Dashboard({ session }) {
         {profile?.role === "admin" && <button type="button" className={activeModule === "users" ? "active" : ""} onClick={() => setActiveModule("users")}>Personal</button>}
         <button type="button" className={activeModule === "projects" ? "active" : ""} onClick={() => setActiveModule("projects")}>Proyectos</button>
       </nav>
+
+      <nav className="internal-mobile-nav" aria-label="Accesos móviles">
+        <button type="button" className={activeModule === "dashboard" ? "active" : ""} onClick={() => openModule("dashboard")}><Building2 size={20} /><span>Inicio</span></button>
+        <button type="button" className={activeModule === "workOrders" ? "active" : ""} onClick={() => openModule("workOrders")}><ClipboardList size={20} /><span>Órdenes</span></button>
+        <button type="button" className={activeModule === "projects" ? "active" : ""} onClick={() => openModule("projects")}><FileText size={20} /><span>Proyectos</span></button>
+        <button type="button" className={showMobileMenu || ["requests", "clients", "locations", "equipment", "users"].includes(activeModule) ? "active" : ""} onClick={() => setShowMobileMenu(true)}><Menu size={20} /><span>Más</span></button>
+      </nav>
+
+      {showMobileMenu && <div className="internal-mobile-menu-backdrop" onClick={() => setShowMobileMenu(false)}><section className="internal-mobile-menu" onClick={(event) => event.stopPropagation()} aria-label="Más módulos"><div className="internal-mobile-menu-heading"><strong>Más módulos</strong><button type="button" onClick={() => setShowMobileMenu(false)} aria-label="Cerrar"><X size={20} /></button></div><button type="button" onClick={() => openModule("requests")}><Mail size={19} /> Solicitudes</button><button type="button" onClick={() => openModule("clients")}><Users size={19} /> Clientes</button><button type="button" onClick={() => openModule("locations")}><Building2 size={19} /> Talleres y ubicaciones</button><button type="button" onClick={() => openModule("equipment")}><Wrench size={19} /> Maquinaria y equipo</button>{profile?.role === "admin" && <button type="button" onClick={() => openModule("users")}><ShieldCheck size={19} /> Personal</button>}</section></div>}
 
       {showInstallHelp && <div className="internal-drawer-backdrop" onClick={() => setShowInstallHelp(false)}><aside className="internal-drawer internal-install-drawer" onClick={(event) => event.stopPropagation()} aria-label="Instalar DOXA Interno"><button type="button" className="internal-drawer-close" onClick={() => setShowInstallHelp(false)} aria-label="Cerrar"><X size={20} /></button><div className="internal-brand-mark"><Building2 size={28} /></div><p className="internal-eyebrow">APP MÓVIL</p><h2>Instala DOXA Interno</h2><p className="internal-drawer-company">Quedará en tu pantalla de inicio y abrirá como una aplicación.</p><ol className="internal-install-steps"><li><strong>iPhone o iPad:</strong> abre esta página en Safari, pulsa Compartir y selecciona “Agregar a inicio”.</li><li><strong>Android:</strong> abre el menú de Chrome y elige “Instalar aplicación” o “Agregar a pantalla principal”.</li></ol></aside></div>}
 
@@ -1993,10 +2009,7 @@ function Dashboard({ session }) {
               <section className="project-detail-section">
                 <div className="project-detail-heading">
                   <div><Camera size={20} /><h3>Fotografías del proyecto</h3></div>
-                  {canEditOperations && <label className="project-upload-button">
-                    <Upload size={16} /> {uploadingPhotos ? "Subiendo…" : "Agregar fotos"}
-                    <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={uploadingPhotos} onChange={uploadProjectPhotos} />
-                  </label>}
+                  {canEditOperations && <div className="project-photo-actions"><label className="project-upload-button project-camera-button"><Camera size={16} /> Tomar foto<input type="file" accept="image/*" capture="environment" disabled={uploadingPhotos} onChange={uploadProjectPhotos} /></label><label className="project-upload-button"><Upload size={16} /> {uploadingPhotos ? "Subiendo…" : "Agregar fotos"}<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={uploadingPhotos} onChange={uploadProjectPhotos} /></label></div>}
                 </div>
                 {projectPhotos.length === 0 ? (
                   <p className="project-section-empty">Todavía no hay fotografías.</p>
