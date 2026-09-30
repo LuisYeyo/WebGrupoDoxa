@@ -527,9 +527,9 @@ function Dashboard({ session }) {
     legal_name: "", trade_name: "", tax_id: "", email: "", phone: "", notes: "",
   })
   const [projectForm, setProjectForm] = useState({
-    client_id: "", location_id: "", name: "", service: "", description: "", amount: "", currency: "MXN", status: "lead", start_date: "", due_date: "",
+    client_id: "", location_id: "", manager_id: "", name: "", service: "", description: "", amount: "", currency: "MXN", status: "lead", start_date: "", due_date: "",
   })
-  const [conversionForm, setConversionForm] = useState({ existing_client_id: "", legal_name: "", tax_id: "", project_name: "", location_id: "", amount: "", currency: "MXN" })
+  const [conversionForm, setConversionForm] = useState({ existing_client_id: "", legal_name: "", tax_id: "", project_name: "", location_id: "", manager_id: "", amount: "", currency: "MXN" })
   const [projectEditForm, setProjectEditForm] = useState(null)
   const [locationForm, setLocationForm] = useState({
     kind: "client_site", client_id: "", name: "", address_line: "", city: "", state: "Tamaulipas", postal_code: "", notes: "",
@@ -587,6 +587,7 @@ function Dashboard({ session }) {
     setEditingProject(false)
     setProjectEditForm({
       location_id: project.work_locations?.id || "",
+      manager_id: project.manager?.id || "",
       name: project.name || "",
       service: project.service || "",
       description: project.description || "",
@@ -790,7 +791,7 @@ function Dashboard({ session }) {
         .select("id, legal_name, trade_name, tax_id, email, phone, notes, status, created_at")
         .order("legal_name"),
       supabase.from("projects")
-        .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
+        .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)")
         .order("created_at", { ascending: false }),
       supabase.from("work_locations")
         .select("id, client_id, company_name, name, kind, workshop_number, address_line, city, state, postal_code, notes, status, clients(legal_name)")
@@ -853,6 +854,7 @@ function Dashboard({ session }) {
       tax_id: "",
       project_name: `${selectedRequest.service} — ${selectedRequest.company_name || selectedRequest.requester_name}`,
       location_id: "",
+      manager_id: "",
       amount: "",
       currency: "MXN",
     })
@@ -891,6 +893,7 @@ function Dashboard({ session }) {
     const { data: project, error: projectError } = await supabase.from("projects").insert({
       client_id: clientId,
       location_id: conversionForm.location_id || null,
+      manager_id: conversionForm.manager_id || null,
       code: createProjectCode(),
       name: conversionForm.project_name.trim(),
       service: selectedRequest.service,
@@ -899,7 +902,7 @@ function Dashboard({ session }) {
       currency: conversionForm.currency,
       status: "approved",
       created_by: session.user.id,
-    }).select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)").single()
+    }).select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)").single()
 
     if (projectError) {
       setError("El cliente quedó registrado, pero no fue posible crear el proyecto.")
@@ -986,6 +989,7 @@ function Dashboard({ session }) {
       .insert({
         client_id: projectForm.client_id,
         location_id: projectForm.location_id || null,
+        manager_id: projectForm.manager_id || null,
         code: createProjectCode(),
         name: projectForm.name.trim(),
         service: projectForm.service.trim() || null,
@@ -997,14 +1001,14 @@ function Dashboard({ session }) {
         due_date: projectForm.due_date || null,
         created_by: session.user.id,
       })
-      .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
+      .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)")
       .single()
 
     if (insertError) {
       setError("No fue posible guardar el trabajo. Verifica el cliente y las fechas.")
     } else {
       setProjects((current) => [data, ...current])
-      setProjectForm({ client_id: "", location_id: "", name: "", service: "", description: "", amount: "", currency: "MXN", status: "lead", start_date: "", due_date: "" })
+      setProjectForm({ client_id: "", location_id: "", manager_id: "", name: "", service: "", description: "", amount: "", currency: "MXN", status: "lead", start_date: "", due_date: "" })
       setShowProjectForm(false)
     }
     setSavingProject(false)
@@ -1018,6 +1022,7 @@ function Dashboard({ session }) {
     setError("")
     const { data, error: updateError } = await supabase.from("projects").update({
       location_id: projectEditForm.location_id || null,
+      manager_id: projectEditForm.manager_id || null,
       name: projectEditForm.name.trim(),
       service: projectEditForm.service.trim() || null,
       description: projectEditForm.description.trim() || null,
@@ -1027,7 +1032,7 @@ function Dashboard({ session }) {
       start_date: projectEditForm.start_date || null,
       due_date: projectEditForm.due_date || null,
     }).eq("id", selectedProject.id)
-      .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)")
+      .select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)")
       .single()
 
     if (updateError) {
@@ -1479,11 +1484,12 @@ function Dashboard({ session }) {
             <div className="internal-empty">Todavía no hay proyectos o trabajos registrados.</div>
           ) : (
             <div className="internal-table-wrap"><table>
-              <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Ubicación</th><th>Servicio</th><th>Monto</th><th>Estado</th><th>Inicio</th></tr></thead>
+              <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Responsable</th><th>Ubicación</th><th>Servicio</th><th>Monto</th><th>Estado</th><th>Inicio</th></tr></thead>
               <tbody>{visibleProjects.map((project) => <tr key={project.id} className="internal-clickable-row" onClick={() => openProject(project)}>
                 <td><strong>{project.code}</strong></td>
                 <td>{project.name}</td>
                 <td className="internal-stacked-cell"><strong>{project.clients?.legal_name || "—"}</strong><span>{project.clients?.tax_id || "Sin RFC"}</span></td>
+                <td>{project.manager?.full_name || "Por asignar"}</td>
                 <td>{project.work_locations?.name || "Por definir"}</td>
                 <td>{project.service || "—"}</td>
                 <td><strong>{formatMoney(project.amount, project.currency)}</strong></td>
@@ -1575,6 +1581,8 @@ function Dashboard({ session }) {
               </select>
               <label htmlFor="project-name">Nombre del trabajo *</label>
               <input id="project-name" value={projectForm.name} onChange={(event) => setProjectForm({ ...projectForm, name: event.target.value })} required />
+              <label htmlFor="project-manager">Responsable o supervisor</label>
+              <select id="project-manager" value={projectForm.manager_id} onChange={(event) => setProjectForm({ ...projectForm, manager_id: event.target.value })}><option value="">Por asignar</option>{team.filter((member) => member.active).map((member) => <option key={member.id} value={member.id}>{member.full_name} — {ROLE_LABELS[member.role] || member.role}</option>)}</select>
               <label htmlFor="project-service">Servicio</label>
               <input id="project-service" placeholder="Ej. Fabricación de tubería" value={projectForm.service} onChange={(event) => setProjectForm({ ...projectForm, service: event.target.value })} />
               <label htmlFor="project-description">Descripción</label>
@@ -1790,6 +1798,8 @@ function Dashboard({ session }) {
                 <option value="">Por definir</option>
                 {locations.filter((location) => location.status === "active").map((location) => <option key={location.id} value={location.id}>{location.name}{location.company_name ? ` — ${location.company_name}` : location.clients?.legal_name ? ` — ${location.clients.legal_name}` : ""}</option>)}
               </select>
+              <label htmlFor="edit-project-manager">Responsable o supervisor</label>
+              <select id="edit-project-manager" value={projectEditForm.manager_id} onChange={(event) => setProjectEditForm({ ...projectEditForm, manager_id: event.target.value })}><option value="">Por asignar</option>{team.filter((member) => member.active).map((member) => <option key={member.id} value={member.id}>{member.full_name} — {ROLE_LABELS[member.role] || member.role}</option>)}</select>
               <div className="internal-form-columns">
                 <div><label htmlFor="edit-project-amount">Monto</label><input id="edit-project-amount" type="number" min="0" step="0.01" value={projectEditForm.amount} onChange={(event) => setProjectEditForm({ ...projectEditForm, amount: event.target.value })} /></div>
                 <div><label htmlFor="edit-project-currency">Moneda</label><select id="edit-project-currency" value={projectEditForm.currency} onChange={(event) => setProjectEditForm({ ...projectEditForm, currency: event.target.value })}><option value="MXN">MXN — Pesos</option><option value="USD">USD — Dólares</option></select></div>
@@ -1807,6 +1817,7 @@ function Dashboard({ session }) {
               <div><dt>Servicio</dt><dd>{selectedProject.service || "Sin especificar"}</dd></div>
               <div><dt>Monto</dt><dd><strong>{formatMoney(selectedProject.amount, selectedProject.currency)}</strong></dd></div>
               <div><dt>Estado</dt><dd>{STATUS_LABELS[selectedProject.status] || selectedProject.status}</dd></div>
+              <div><dt>Responsable</dt><dd>{selectedProject.manager?.full_name || "Por asignar"}</dd></div>
               <div><dt>Ubicación</dt><dd>{selectedProject.work_locations?.name || "Por definir"}</dd></div>
               <div><dt>Inicio</dt><dd>{selectedProject.start_date || "Por definir"}</dd></div>
               <div><dt>Entrega</dt><dd>{selectedProject.due_date || "Por definir"}</dd></div>
@@ -1997,6 +2008,8 @@ function Dashboard({ session }) {
               <input id="conversion-project-name" value={conversionForm.project_name} onChange={(event) => setConversionForm({ ...conversionForm, project_name: event.target.value })} required />
               <label htmlFor="conversion-location">Taller o ubicación</label>
               <select id="conversion-location" value={conversionForm.location_id} onChange={(event) => setConversionForm({ ...conversionForm, location_id: event.target.value })}><option value="">Por definir</option>{locations.filter((location) => location.status === "active").map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select>
+              <label htmlFor="conversion-manager">Responsable o supervisor</label>
+              <select id="conversion-manager" value={conversionForm.manager_id} onChange={(event) => setConversionForm({ ...conversionForm, manager_id: event.target.value })}><option value="">Por asignar</option>{team.filter((member) => member.active).map((member) => <option key={member.id} value={member.id}>{member.full_name} — {ROLE_LABELS[member.role] || member.role}</option>)}</select>
               <div className="internal-form-columns"><div><label htmlFor="conversion-amount">Monto</label><input id="conversion-amount" type="number" min="0" step="0.01" value={conversionForm.amount} onChange={(event) => setConversionForm({ ...conversionForm, amount: event.target.value })} /></div><div><label htmlFor="conversion-currency">Moneda</label><select id="conversion-currency" value={conversionForm.currency} onChange={(event) => setConversionForm({ ...conversionForm, currency: event.target.value })}><option value="MXN">MXN</option><option value="USD">USD</option></select></div></div>
               <button type="submit" disabled={savingConversion}>{savingConversion ? "Creando…" : "Crear y vincular"}</button>
             </form>}
