@@ -486,10 +486,12 @@ function Dashboard({ session }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [selectedRequest, setSelectedRequest] = useState(null)
+  const [convertingRequest, setConvertingRequest] = useState(false)
   const [requestView, setRequestView] = useState("active")
   const [searchTerm, setSearchTerm] = useState("")
   const [listStatus, setListStatus] = useState("all")
   const [savingStatus, setSavingStatus] = useState(false)
+  const [savingConversion, setSavingConversion] = useState(false)
   const [clients, setClients] = useState([])
   const [projects, setProjects] = useState([])
   const [locations, setLocations] = useState([])
@@ -527,6 +529,7 @@ function Dashboard({ session }) {
   const [projectForm, setProjectForm] = useState({
     client_id: "", location_id: "", name: "", service: "", description: "", amount: "", currency: "MXN", status: "lead", start_date: "", due_date: "",
   })
+  const [conversionForm, setConversionForm] = useState({ existing_client_id: "", legal_name: "", tax_id: "", project_name: "", location_id: "", amount: "", currency: "MXN" })
   const [projectEditForm, setProjectEditForm] = useState(null)
   const [locationForm, setLocationForm] = useState({
     kind: "client_site", client_id: "", name: "", address_line: "", city: "", state: "Tamaulipas", postal_code: "", notes: "",
@@ -777,7 +780,7 @@ function Dashboard({ session }) {
       supabase.from("profiles").select("full_name, role, active")
         .eq("id", session.user.id).single(),
       supabase.from("quote_requests")
-        .select("id, request_code, requester_name, company_name, email, phone, service, message, status, received_at")
+        .select("id, request_code, client_id, project_id, requester_name, company_name, email, phone, service, message, status, received_at")
         .order("received_at", { ascending: false }).limit(100),
       supabase.from("clients")
         .select("id, legal_name, trade_name, tax_id, email, phone, notes, status, created_at")
@@ -836,6 +839,83 @@ function Dashboard({ session }) {
     }
 
     setSavingStatus(false)
+  }
+
+  const beginRequestConversion = () => {
+    if (!selectedRequest) return
+    setConversionForm({
+      existing_client_id: selectedRequest.client_id || "",
+      legal_name: selectedRequest.company_name || selectedRequest.requester_name,
+      tax_id: "",
+      project_name: `${selectedRequest.service} — ${selectedRequest.company_name || selectedRequest.requester_name}`,
+      location_id: "",
+      amount: "",
+      currency: "MXN",
+    })
+    setConvertingRequest(true)
+  }
+
+  const convertRequestToProject = async (event) => {
+    event.preventDefault()
+    if (!selectedRequest || !["admin", "manager", "supervisor"].includes(profile?.role)) return
+
+    setSavingConversion(true)
+    setError("")
+    let clientId = conversionForm.existing_client_id
+    let createdClient = null
+
+    if (!clientId) {
+      const { data, error: clientError } = await supabase.from("clients").insert({
+        legal_name: conversionForm.legal_name.trim(),
+        tax_id: conversionForm.tax_id.trim().toUpperCase() || null,
+        email: selectedRequest.email,
+        phone: selectedRequest.phone || null,
+        notes: `Creado desde la solicitud ${selectedRequest.request_code}`,
+        created_by: session.user.id,
+      }).select("id, legal_name, trade_name, tax_id, email, phone, notes, status, created_at").single()
+
+      if (clientError) {
+        setError("No fue posible crear el cliente. Revisa que el RFC no esté repetido.")
+        setSavingConversion(false)
+        return
+      }
+      clientId = data.id
+      createdClient = data
+      await supabase.from("client_contacts").insert({ client_id: clientId, full_name: selectedRequest.requester_name, email: selectedRequest.email, phone: selectedRequest.phone || null, is_primary: true })
+    }
+
+    const { data: project, error: projectError } = await supabase.from("projects").insert({
+      client_id: clientId,
+      location_id: conversionForm.location_id || null,
+      code: createProjectCode(),
+      name: conversionForm.project_name.trim(),
+      service: selectedRequest.service,
+      description: selectedRequest.message,
+      amount: conversionForm.amount === "" ? null : Number(conversionForm.amount),
+      currency: conversionForm.currency,
+      status: "approved",
+      created_by: session.user.id,
+    }).select("id, code, name, service, description, amount, currency, status, start_date, due_date, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state)").single()
+
+    if (projectError) {
+      setError("El cliente quedó registrado, pero no fue posible crear el proyecto.")
+      if (createdClient) setClients((current) => [...current, createdClient].sort((a, b) => a.legal_name.localeCompare(b.legal_name)))
+      setSavingConversion(false)
+      return
+    }
+
+    const { error: requestError } = await supabase.from("quote_requests").update({ client_id: clientId, project_id: project.id, status: "approved" }).eq("id", selectedRequest.id)
+    if (requestError) {
+      setError("El proyecto se creó, pero la solicitud no pudo vincularse automáticamente.")
+    } else {
+      const updatedRequest = { ...selectedRequest, client_id: clientId, project_id: project.id, status: "approved" }
+      if (createdClient) setClients((current) => [...current, createdClient].sort((a, b) => a.legal_name.localeCompare(b.legal_name)))
+      setProjects((current) => [project, ...current])
+      setRequests((current) => current.map((request) => request.id === updatedRequest.id ? updatedRequest : request))
+      setSelectedRequest(updatedRequest)
+      setConvertingRequest(false)
+    }
+    setSavingConversion(false)
   }
 
   const createClient = async (event) => {
@@ -1321,7 +1401,7 @@ function Dashboard({ session }) {
                 <thead><tr><th>Folio</th><th>Cliente</th><th>Servicio</th><th>Estado</th><th>Recibida</th></tr></thead>
                 <tbody>
                   {visibleRequests.map((request) => (
-                    <tr key={request.id} className="internal-clickable-row" onClick={() => setSelectedRequest(request)}>
+                    <tr key={request.id} className="internal-clickable-row" onClick={() => { setSelectedRequest(request); setConvertingRequest(false) }}>
                       <td><strong>{request.request_code}</strong></td>
                       <td className="internal-stacked-cell"><strong>{request.requester_name}</strong><span>{request.company_name || request.email}</span></td>
                       <td>{request.service}</td>
@@ -1860,9 +1940,9 @@ function Dashboard({ session }) {
       )}
 
       {selectedRequest && (
-        <div className="internal-drawer-backdrop" onClick={() => setSelectedRequest(null)}>
+        <div className="internal-drawer-backdrop" onClick={() => { setSelectedRequest(null); setConvertingRequest(false) }}>
           <aside className="internal-drawer" onClick={(event) => event.stopPropagation()} aria-label="Detalle de solicitud">
-            <button type="button" className="internal-drawer-close" onClick={() => setSelectedRequest(null)} aria-label="Cerrar">
+            <button type="button" className="internal-drawer-close" onClick={() => { setSelectedRequest(null); setConvertingRequest(false) }} aria-label="Cerrar">
               <X size={20} />
             </button>
 
@@ -1881,6 +1961,27 @@ function Dashboard({ session }) {
               <span>Descripción del proyecto</span>
               <p>{selectedRequest.message}</p>
             </div>
+
+            {["admin", "manager", "supervisor"].includes(profile?.role) && !selectedRequest.project_id && !convertingRequest && <button type="button" className="request-convert-button" onClick={beginRequestConversion}><Plus size={17} /> Crear cliente y proyecto</button>}
+            {selectedRequest.project_id && <div className="internal-notice">Esta solicitud ya está vinculada con un proyecto.</div>}
+
+            {convertingRequest && <form className="internal-form internal-client-form request-conversion-form" onSubmit={convertRequestToProject}>
+              <div className="request-conversion-heading"><h3>Convertir en proyecto</h3><button type="button" onClick={() => setConvertingRequest(false)}>Cancelar</button></div>
+              <label htmlFor="conversion-existing-client">Usar un cliente existente</label>
+              <select id="conversion-existing-client" value={conversionForm.existing_client_id} onChange={(event) => setConversionForm({ ...conversionForm, existing_client_id: event.target.value })}><option value="">Crear cliente nuevo</option>{clients.filter((client) => client.status === "active").map((client) => <option key={client.id} value={client.id}>{client.legal_name}{client.tax_id ? ` — ${client.tax_id}` : ""}</option>)}</select>
+              {!conversionForm.existing_client_id && <>
+                <label htmlFor="conversion-legal-name">Razón social o nombre *</label>
+                <input id="conversion-legal-name" value={conversionForm.legal_name} onChange={(event) => setConversionForm({ ...conversionForm, legal_name: event.target.value })} required />
+                <label htmlFor="conversion-tax-id">RFC</label>
+                <input id="conversion-tax-id" value={conversionForm.tax_id} onChange={(event) => setConversionForm({ ...conversionForm, tax_id: event.target.value.toUpperCase() })} />
+              </>}
+              <label htmlFor="conversion-project-name">Nombre del proyecto *</label>
+              <input id="conversion-project-name" value={conversionForm.project_name} onChange={(event) => setConversionForm({ ...conversionForm, project_name: event.target.value })} required />
+              <label htmlFor="conversion-location">Taller o ubicación</label>
+              <select id="conversion-location" value={conversionForm.location_id} onChange={(event) => setConversionForm({ ...conversionForm, location_id: event.target.value })}><option value="">Por definir</option>{locations.filter((location) => location.status === "active").map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select>
+              <div className="internal-form-columns"><div><label htmlFor="conversion-amount">Monto</label><input id="conversion-amount" type="number" min="0" step="0.01" value={conversionForm.amount} onChange={(event) => setConversionForm({ ...conversionForm, amount: event.target.value })} /></div><div><label htmlFor="conversion-currency">Moneda</label><select id="conversion-currency" value={conversionForm.currency} onChange={(event) => setConversionForm({ ...conversionForm, currency: event.target.value })}><option value="MXN">MXN</option><option value="USD">USD</option></select></div></div>
+              <button type="submit" disabled={savingConversion}>{savingConversion ? "Creando…" : "Crear y vincular"}</button>
+            </form>}
 
             <label className="internal-status-field" htmlFor="request-status">Estado</label>
             <select id="request-status" value={selectedRequest.status}
