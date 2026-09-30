@@ -540,6 +540,7 @@ function Dashboard({ session }) {
   const [loadingProject, setLoadingProject] = useState(false)
   const [savingLesson, setSavingLesson] = useState(false)
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
+  const [savingPhotoId, setSavingPhotoId] = useState(null)
   const [uploadingDocument, setUploadingDocument] = useState(false)
   const [activeModule, setActiveModule] = useState("dashboard")
   const [showClientForm, setShowClientForm] = useState(false)
@@ -784,6 +785,20 @@ function Dashboard({ session }) {
 
     setProjectPhotos((current) => [...uploaded, ...current])
     setUploadingPhotos(false)
+  }
+
+  const updatePhotoDescription = async (photo) => {
+    if (!canEditOperations) return
+    setSavingPhotoId(photo.id)
+    setError("")
+    const description = photo.description?.trim() || null
+    const { error: updateError } = await supabase.from("documents").update({ description }).eq("id", photo.id).eq("category", "work_evidence")
+    if (updateError) {
+      setError("No fue posible guardar la descripción de la fotografía.")
+    } else {
+      setProjectPhotos((current) => current.map((item) => item.id === photo.id ? { ...item, description } : item))
+    }
+    setSavingPhotoId(null)
   }
 
   const uploadProjectDocument = async (event) => {
@@ -2115,9 +2130,10 @@ function Dashboard({ session }) {
                   <p className="project-section-empty">Todavía no hay fotografías.</p>
                 ) : (
                   <div className="project-photo-grid">
-                    {projectPhotos.map((photo) => <a key={photo.id} href={photo.url} target="_blank" rel="noreferrer" title={photo.file_name}>
-                      <img src={photo.url} alt={photo.description || photo.file_name} loading="lazy" />
-                    </a>)}
+                    {projectPhotos.map((photo) => <article key={photo.id}>
+                      <a href={photo.url} target="_blank" rel="noreferrer" title={photo.file_name}><img src={photo.url} alt={photo.description || photo.file_name} loading="lazy" /></a>
+                      {canEditOperations ? <div className="project-photo-caption"><textarea rows="2" maxLength={500} value={photo.description || ""} onChange={(event) => setProjectPhotos((current) => current.map((item) => item.id === photo.id ? { ...item, description: event.target.value } : item))} placeholder="Describe la actividad mostrada…" /><button type="button" onClick={() => updatePhotoDescription(photo)} disabled={savingPhotoId === photo.id}>{savingPhotoId === photo.id ? "Guardando…" : "Guardar texto"}</button></div> : <p>{photo.description || "Sin descripción"}</p>}
+                    </article>)}
                   </div>
                 )}
               </section>
