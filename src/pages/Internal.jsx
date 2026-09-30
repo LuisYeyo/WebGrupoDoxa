@@ -571,6 +571,10 @@ function Dashboard({ session }) {
   const visibleEquipment = equipment.filter((item) => matchesStatus(item.status, RECORD_STATUS_LABELS) && includesSearch(item.internal_code, item.name, item.category, item.brand, item.model, item.serial_number, item.work_locations?.name))
   const visibleWorkOrders = workOrders.filter((order) => matchesStatus(order.status, WORK_ORDER_STATUS_LABELS) && includesSearch(order.code, order.title, order.description, order.projects?.code, order.projects?.name, order.profiles?.full_name))
   const visibleProjects = projects.filter((project) => matchesStatus(project.status, STATUS_LABELS) && includesSearch(project.code, project.name, project.service, project.clients?.legal_name, project.clients?.tax_id, project.work_locations?.name))
+  const selectedProjectOrders = selectedProject ? workOrders.filter((order) => order.project_id === selectedProject.id) : []
+  const operativeProjectOrders = selectedProjectOrders.filter((order) => order.status !== "cancelled")
+  const completedProjectOrders = operativeProjectOrders.filter((order) => order.status === "completed").length
+  const projectProgress = operativeProjectOrders.length ? Math.round((completedProjectOrders / operativeProjectOrders.length) * 100) : 0
 
   const statusFilterOptions = activeModule === "requests" ? STATUS_LABELS
     : activeModule === "clients" || activeModule === "locations" || activeModule === "equipment" ? RECORD_STATUS_LABELS
@@ -1808,11 +1812,22 @@ function Dashboard({ session }) {
               <div><dt>Entrega</dt><dd>{selectedProject.due_date || "Por definir"}</dd></div>
             </dl>}
 
+            <section className="project-progress-card" aria-label="Avance de órdenes de trabajo">
+              <div className="project-progress-heading"><div><span>Avance operativo</span><strong>{projectProgress}%</strong></div><button type="button" onClick={() => { setSearchTerm(selectedProject.code); setListStatus("all"); setActiveModule("workOrders"); setSelectedProject(null) }}>Ver todas las órdenes <ChevronRight size={16} /></button></div>
+              <div className="project-progress-track"><span style={{ width: `${projectProgress}%` }} /></div>
+              <div className="project-progress-stats">
+                <span><strong>{operativeProjectOrders.length}</strong> órdenes</span>
+                <span><strong>{completedProjectOrders}</strong> terminadas</span>
+                <span><strong>{operativeProjectOrders.filter((order) => ["pending", "scheduled"].includes(order.status)).length}</strong> pendientes</span>
+                <span><strong>{operativeProjectOrders.filter((order) => ["in_progress", "blocked"].includes(order.status)).length}</strong> activas</span>
+              </div>
+            </section>
+
             {loadingProject ? <div className="internal-empty">Cargando expediente…</div> : <>
               <section className="project-detail-section">
                 <div className="project-detail-heading"><div><ClipboardList size={20} /><h3>Órdenes de trabajo</h3></div></div>
-                {workOrders.filter((order) => order.project_id === selectedProject.id).length === 0 ? <p className="project-section-empty">Todavía no hay órdenes para este proyecto.</p> : (
-                  <div className="project-work-order-list">{workOrders.filter((order) => order.project_id === selectedProject.id).map((order) => <article key={order.id}>
+                {selectedProjectOrders.length === 0 ? <p className="project-section-empty">Todavía no hay órdenes para este proyecto.</p> : (
+                  <div className="project-work-order-list">{selectedProjectOrders.map((order) => <article key={order.id}>
                     <div className="project-work-order-heading"><div><strong>{order.code}</strong><h4>{order.title}</h4></div><select value={order.status} onChange={(event) => updateWorkOrderStatus(order, event.target.value)} disabled={!canEditOperations || savingWorkOrder}>{Object.entries(WORK_ORDER_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
                     {order.description && <p>{order.description}</p>}
                     <small>Responsable: {order.profiles?.full_name || "Sin asignar"} · Programada: {order.scheduled_date || "por definir"} · Entrega: {order.due_date || "por definir"}</small>
