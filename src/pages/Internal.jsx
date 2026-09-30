@@ -481,6 +481,9 @@ function InternalUsers({ session }) {
 
 function Dashboard({ session }) {
   const [dashboardDate] = useState(() => new Date())
+  const [installPrompt, setInstallPrompt] = useState(null)
+  const [showInstallHelp, setShowInstallHelp] = useState(false)
+  const [isInstalled, setIsInstalled] = useState(() => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true)
   const [profile, setProfile] = useState(null)
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1323,6 +1326,34 @@ function Dashboard({ session }) {
     return () => window.clearTimeout(timeout)
   }, [loadData])
 
+  useEffect(() => {
+    const captureInstallPrompt = (event) => {
+      event.preventDefault()
+      setInstallPrompt(event)
+    }
+    const markInstalled = () => {
+      setIsInstalled(true)
+      setInstallPrompt(null)
+    }
+    window.addEventListener("beforeinstallprompt", captureInstallPrompt)
+    window.addEventListener("appinstalled", markInstalled)
+    return () => {
+      window.removeEventListener("beforeinstallprompt", captureInstallPrompt)
+      window.removeEventListener("appinstalled", markInstalled)
+    }
+  }, [])
+
+  const installApp = async () => {
+    if (!installPrompt) {
+      setShowInstallHelp(true)
+      return
+    }
+    await installPrompt.prompt()
+    const choice = await installPrompt.userChoice
+    if (choice.outcome === "accepted") setIsInstalled(true)
+    setInstallPrompt(null)
+  }
+
   return (
     <main className="internal-dashboard">
       <header className="internal-topbar">
@@ -1332,6 +1363,7 @@ function Dashboard({ session }) {
         </div>
 
         <div className="internal-user-actions">
+          {!isInstalled && <button type="button" className="internal-install-button" onClick={installApp}><Download size={17} /><span>Instalar app</span></button>}
           <div className="internal-user-copy">
             <strong>{profile?.full_name || session.user.email}</strong>
             <span>{ROLE_LABELS[profile?.role] || "Usuario"}</span>
@@ -1353,6 +1385,8 @@ function Dashboard({ session }) {
         {profile?.role === "admin" && <button type="button" className={activeModule === "users" ? "active" : ""} onClick={() => setActiveModule("users")}>Personal</button>}
         <button type="button" className={activeModule === "projects" ? "active" : ""} onClick={() => setActiveModule("projects")}>Proyectos</button>
       </nav>
+
+      {showInstallHelp && <div className="internal-drawer-backdrop" onClick={() => setShowInstallHelp(false)}><aside className="internal-drawer internal-install-drawer" onClick={(event) => event.stopPropagation()} aria-label="Instalar DOXA Interno"><button type="button" className="internal-drawer-close" onClick={() => setShowInstallHelp(false)} aria-label="Cerrar"><X size={20} /></button><div className="internal-brand-mark"><Building2 size={28} /></div><p className="internal-eyebrow">APP MÓVIL</p><h2>Instala DOXA Interno</h2><p className="internal-drawer-company">Quedará en tu pantalla de inicio y abrirá como una aplicación.</p><ol className="internal-install-steps"><li><strong>iPhone o iPad:</strong> abre esta página en Safari, pulsa Compartir y selecciona “Agregar a inicio”.</li><li><strong>Android:</strong> abre el menú de Chrome y elige “Instalar aplicación” o “Agregar a pantalla principal”.</li></ol></aside></div>}
 
       <section className="internal-content">
         <div className="internal-heading-row">
