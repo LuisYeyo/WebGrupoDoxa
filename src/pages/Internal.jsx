@@ -2172,6 +2172,22 @@ function Dashboard({ session }) {
             </>}
 
             {!loadingProject && <article className="project-print-report" aria-label="Reporte imprimible del proyecto">
+              <section className="project-print-cover">
+                <div className="project-print-cover-brand"><img src={doxaLogo} alt="Grupo Industrial DOXA" /><div><strong>GRUPO INDUSTRIAL DOXA</strong><span>Soluciones industriales</span></div></div>
+                <div className="project-print-cover-title"><span>REPORTE OPERATIVO Y FOTOGRÁFICO</span><h1>{selectedProject.name}</h1><p>{selectedProject.service || "Servicio industrial"}</p></div>
+                <dl className="project-print-cover-data">
+                  <div><dt>Cliente</dt><dd>{selectedProject.clients?.legal_name || "Sin especificar"}</dd></div>
+                  <div><dt>Folio del proyecto</dt><dd>{selectedProject.code}</dd></div>
+                  <div><dt>Solicitud de origen</dt><dd>{requests.find((request) => request.project_id === selectedProject.id)?.request_code || "No aplica"}</dd></div>
+                  <div><dt>Órdenes de trabajo</dt><dd>{selectedProjectOrders.map((order) => order.code).join(", ") || "Sin órdenes registradas"}</dd></div>
+                  <div><dt>Periodo</dt><dd>{selectedProject.start_date || "Por definir"} a {selectedProject.due_date || "Por definir"}</dd></div>
+                  <div><dt>Responsable</dt><dd>{selectedProject.manager?.full_name || "Por asignar"}</dd></div>
+                  <div><dt>Ubicación</dt><dd>{selectedProject.work_locations?.name || "Por definir"}</dd></div>
+                  <div><dt>Fecha del reporte</dt><dd>{new Intl.DateTimeFormat("es-MX", { dateStyle: "long" }).format(new Date())}</dd></div>
+                </dl>
+                <div className="project-print-cover-footer"><span>Altamira, Tamaulipas</span><strong>DOCUMENTO DE TRABAJO</strong></div>
+              </section>
+
               <header className="project-print-header">
                 <img src={doxaLogo} alt="Grupo Industrial DOXA" />
                 <div><h1>Grupo Industrial DOXA</h1><p>Carretera Tampico Mante Km 27 #60, Col. Ampliación Melchor Ocampo<br />Altamira, Tamaulipas, C.P. 89602 · Tel. 833 328 59 35<br />grupoindustrialdoxa@gmail.com</p></div>
