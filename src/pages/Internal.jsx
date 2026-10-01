@@ -63,7 +63,7 @@ const DOCUMENT_CATEGORY_LABELS = {
 
 const AUDIT_TABLE_LABELS = { clients: "Cliente", projects: "Proyecto", quote_requests: "Solicitud", work_orders: "Orden de trabajo", equipment: "Equipo", work_locations: "Ubicación" }
 const AUDIT_ACTION_LABELS = { INSERT: "Registró", UPDATE: "Actualizó", DELETE: "Eliminó" }
-const AUDIT_FIELD_LABELS = { status: "estado", name: "nombre", legal_name: "razón social", manager_id: "responsable", assigned_to: "asignación", due_date: "fecha de entrega", start_date: "fecha de inicio", location_id: "ubicación", amount: "monto", phone: "teléfono", email: "correo", notes: "notas", description: "descripción" }
+const AUDIT_FIELD_LABELS = { status: "estado", name: "nombre", legal_name: "razón social", manager_id: "responsable", assigned_to: "asignación", due_date: "fecha estimada de término", start_date: "fecha de inicio", location_id: "ubicación", phone: "teléfono", email: "correo", notes: "notas", description: "descripción" }
 
 function auditRecordName(log) {
   const data = log.new_data || log.old_data || {}
@@ -84,11 +84,6 @@ function formatDate(value) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value))
-}
-
-function formatMoney(value, currency = "MXN") {
-  if (value === null || value === undefined || value === "") return "Por definir"
-  return new Intl.NumberFormat("es-MX", { style: "currency", currency }).format(Number(value))
 }
 
 function csvCell(value) {
@@ -542,6 +537,7 @@ function Dashboard({ session }) {
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const [savingPhotoId, setSavingPhotoId] = useState(null)
   const [deletingPhotoId, setDeletingPhotoId] = useState(null)
+  const [savingPublication, setSavingPublication] = useState(false)
   const [uploadingDocument, setUploadingDocument] = useState(false)
   const [activeModule, setActiveModule] = useState("dashboard")
   const [showClientForm, setShowClientForm] = useState(false)
@@ -561,9 +557,9 @@ function Dashboard({ session }) {
     legal_name: "", trade_name: "", tax_id: "", email: "", phone: "", notes: "",
   })
   const [projectForm, setProjectForm] = useState({
-    client_id: "", location_id: "", manager_id: "", name: "", service: "", description: "", amount: "", currency: "MXN", status: "lead", start_date: "", due_date: "",
+    client_id: "", location_id: "", manager_id: "", name: "", service: "", description: "", status: "lead", start_date: "", due_date: "",
   })
-  const [conversionForm, setConversionForm] = useState({ existing_client_id: "", legal_name: "", tax_id: "", project_name: "", location_id: "", manager_id: "", amount: "", currency: "MXN" })
+  const [conversionForm, setConversionForm] = useState({ existing_client_id: "", legal_name: "", tax_id: "", project_name: "", location_id: "", manager_id: "", start_date: "", due_date: "" })
   const [projectEditForm, setProjectEditForm] = useState(null)
   const [locationForm, setLocationForm] = useState({
     kind: "client_site", client_id: "", name: "", address_line: "", city: "", state: "Tamaulipas", postal_code: "", notes: "",
@@ -656,8 +652,6 @@ function Dashboard({ session }) {
       name: project.name || "",
       service: project.service || "",
       description: project.description || "",
-      amount: project.amount ?? "",
-      currency: project.currency || "MXN",
       status: project.status,
       start_date: project.start_date || "",
       due_date: project.due_date || "",
@@ -669,7 +663,7 @@ function Dashboard({ session }) {
     setLoadingProject(true)
     setError("")
 
-    const [lessonResult, photoResult, documentResult, equipmentResult] = await Promise.all([
+    const [lessonResult, photoResult, documentResult, equipmentResult, publicationResult, photoPublicationResult] = await Promise.all([
       supabase.from("project_lessons")
         .select("id, category, title, situation, lesson, created_at, profiles(full_name)")
         .eq("project_id", project.id)
@@ -688,20 +682,24 @@ function Dashboard({ session }) {
         .select("equipment_id, purpose, planned_from, planned_until, notes, equipment(id, internal_code, name, brand, model)")
         .eq("project_id", project.id)
         .order("created_at", { ascending: false }),
+      supabase.from("projects").select("is_public, public_description, published_at").eq("id", project.id).single(),
+      supabase.from("documents").select("id, is_public").eq("project_id", project.id).eq("category", "work_evidence"),
     ])
 
     if (lessonResult.error || photoResult.error || documentResult.error || equipmentResult.error) {
       setError("No fue posible cargar el expediente completo del proyecto.")
     } else {
       setProjectLessons(lessonResult.data ?? [])
+      const publicPhotoIds = new Set((photoPublicationResult.data ?? []).filter((photo) => photo.is_public).map((photo) => photo.id))
       const photosWithUrls = await Promise.all((photoResult.data ?? []).map(async (photo) => {
         const { data } = await supabase.storage.from("project-media").createSignedUrl(photo.storage_path, 3600)
-        return { ...photo, url: data?.signedUrl || "" }
+        return { ...photo, is_public: publicPhotoIds.has(photo.id), url: data?.signedUrl || "" }
       }))
       setProjectPhotos(photosWithUrls)
       setProjectDocuments(documentResult.data ?? [])
       setProjectEquipment(equipmentResult.data ?? [])
     }
+    if (!publicationResult.error) setSelectedProject((current) => current?.id === project.id ? { ...current, ...publicationResult.data } : current)
     setLoadingProject(false)
   }
 
@@ -781,7 +779,7 @@ function Dashboard({ session }) {
       }
 
       const { data: signedData } = await supabase.storage.from("project-media").createSignedUrl(storagePath, 3600)
-      uploaded.push({ ...document, url: signedData?.signedUrl || "" })
+      uploaded.push({ ...document, is_public: false, url: signedData?.signedUrl || "" })
     }
 
     setProjectPhotos((current) => [...current, ...uploaded])
@@ -800,6 +798,40 @@ function Dashboard({ session }) {
       setProjectPhotos((current) => current.map((item) => item.id === photo.id ? { ...item, description } : item))
     }
     setSavingPhotoId(null)
+  }
+
+  const togglePhotoPublication = async (photo) => {
+    if (!["admin", "manager", "supervisor"].includes(profile?.role)) return
+    setSavingPhotoId(photo.id)
+    setError("")
+    const { error: updateError } = await supabase.from("documents").update({ is_public: !photo.is_public }).eq("id", photo.id).eq("category", "work_evidence")
+    if (updateError) {
+      setError("No fue posible cambiar la visibilidad de la fotografía. Verifica que la migración de publicación esté instalada.")
+    } else {
+      setProjectPhotos((current) => current.map((item) => item.id === photo.id ? { ...item, is_public: !item.is_public } : item))
+    }
+    setSavingPhotoId(null)
+  }
+
+  const updateProjectPublication = async (nextValue) => {
+    if (!selectedProject || !["admin", "manager", "supervisor"].includes(profile?.role)) return
+    if (selectedProject.status !== "completed") {
+      setError("Finaliza el proyecto antes de publicarlo en el sitio web.")
+      return
+    }
+    setSavingPublication(true)
+    setError("")
+    const { data, error: updateError } = await supabase.from("projects").update({
+      is_public: nextValue,
+      public_description: selectedProject.public_description?.trim() || selectedProject.description || selectedProject.service || null,
+      published_at: nextValue ? (selectedProject.published_at || new Date().toISOString()) : null,
+    }).eq("id", selectedProject.id).select("is_public, public_description, published_at").single()
+    if (updateError) {
+      setError("No fue posible cambiar la publicación. Verifica que la migración de proyectos públicos esté instalada.")
+    } else {
+      setSelectedProject((current) => ({ ...current, ...data }))
+    }
+    setSavingPublication(false)
   }
 
   const deleteProjectPhoto = async (photo) => {
@@ -950,8 +982,8 @@ function Dashboard({ session }) {
       project_name: `${selectedRequest.service} — ${selectedRequest.company_name || selectedRequest.requester_name}`,
       location_id: "",
       manager_id: "",
-      amount: "",
-      currency: "MXN",
+      start_date: "",
+      due_date: "",
     })
     setConvertingRequest(true)
   }
@@ -993,8 +1025,8 @@ function Dashboard({ session }) {
       name: conversionForm.project_name.trim(),
       service: selectedRequest.service,
       description: selectedRequest.message,
-      amount: conversionForm.amount === "" ? null : Number(conversionForm.amount),
-      currency: conversionForm.currency,
+      start_date: conversionForm.start_date || null,
+      due_date: conversionForm.due_date || null,
       status: "approved",
       created_by: session.user.id,
     }).select("id, code, name, service, description, amount, currency, status, start_date, due_date, completed_at, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)").single()
@@ -1089,8 +1121,6 @@ function Dashboard({ session }) {
         name: projectForm.name.trim(),
         service: projectForm.service.trim() || null,
         description: projectForm.description.trim() || null,
-        amount: projectForm.amount === "" ? null : Number(projectForm.amount),
-        currency: projectForm.currency,
         status: projectForm.status,
         start_date: projectForm.start_date || null,
         due_date: projectForm.due_date || null,
@@ -1103,7 +1133,7 @@ function Dashboard({ session }) {
       setError("No fue posible guardar el trabajo. Verifica el cliente y las fechas.")
     } else {
       setProjects((current) => [data, ...current])
-      setProjectForm({ client_id: "", location_id: "", manager_id: "", name: "", service: "", description: "", amount: "", currency: "MXN", status: "lead", start_date: "", due_date: "" })
+      setProjectForm({ client_id: "", location_id: "", manager_id: "", name: "", service: "", description: "", status: "lead", start_date: "", due_date: "" })
       setShowProjectForm(false)
     }
     setSavingProject(false)
@@ -1122,8 +1152,6 @@ function Dashboard({ session }) {
       name: projectEditForm.name.trim(),
       service: projectEditForm.service.trim() || null,
       description: projectEditForm.description.trim() || null,
-      amount: projectEditForm.amount === "" ? null : Number(projectEditForm.amount),
-      currency: projectEditForm.currency,
       status: projectEditForm.status,
       start_date: projectEditForm.start_date || null,
       due_date: projectEditForm.due_date || null,
@@ -1705,7 +1733,7 @@ function Dashboard({ session }) {
             <div className="internal-empty">Todavía no hay proyectos o trabajos registrados.</div>
           ) : (
             <div className="internal-table-wrap"><table>
-              <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Responsable</th><th>Ubicación</th><th>Servicio</th><th>Monto</th><th>Estado</th><th>Inicio</th></tr></thead>
+              <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Responsable</th><th>Ubicación</th><th>Servicio</th><th>Estado</th><th>Inicio</th><th>Término</th></tr></thead>
               <tbody>{visibleProjects.map((project) => <tr key={project.id} className="internal-clickable-row" onClick={() => openProject(project)}>
                 <td><strong>{project.code}</strong></td>
                 <td>{project.name}</td>
@@ -1713,9 +1741,9 @@ function Dashboard({ session }) {
                 <td>{project.manager?.full_name || "Por asignar"}</td>
                 <td>{project.work_locations?.name || "Por definir"}</td>
                 <td>{project.service || "—"}</td>
-                <td><strong>{formatMoney(project.amount, project.currency)}</strong></td>
                 <td><span className={`internal-status status-${project.status}`}>{STATUS_LABELS[project.status] || project.status}</span></td>
                 <td>{project.start_date || "Por definir"}</td>
+                <td>{project.completed_at ? formatDate(project.completed_at) : project.due_date || "Por definir"}</td>
               </tr>)}</tbody>
             </table></div>
           )}
@@ -1808,17 +1836,13 @@ function Dashboard({ session }) {
               <input id="project-service" placeholder="Ej. Fabricación de tubería" value={projectForm.service} onChange={(event) => setProjectForm({ ...projectForm, service: event.target.value })} />
               <label htmlFor="project-description">Descripción</label>
               <textarea id="project-description" rows="4" value={projectForm.description} onChange={(event) => setProjectForm({ ...projectForm, description: event.target.value })} />
-              <div className="internal-form-columns">
-                <div><label htmlFor="project-amount">Monto del trabajo</label><input id="project-amount" type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.00" value={projectForm.amount} onChange={(event) => setProjectForm({ ...projectForm, amount: event.target.value })} /></div>
-                <div><label htmlFor="project-currency">Moneda</label><select id="project-currency" value={projectForm.currency} onChange={(event) => setProjectForm({ ...projectForm, currency: event.target.value })}><option value="MXN">MXN — Pesos</option><option value="USD">USD — Dólares</option></select></div>
-              </div>
               <label htmlFor="project-status">Estado</label>
               <select id="project-status" value={projectForm.status} onChange={(event) => setProjectForm({ ...projectForm, status: event.target.value })}>
                 {Object.entries(STATUS_LABELS).filter(([value]) => value !== "completed").map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
               <div className="internal-form-columns">
                 <div><label htmlFor="project-start">Fecha de inicio</label><input id="project-start" type="date" value={projectForm.start_date} onChange={(event) => setProjectForm({ ...projectForm, start_date: event.target.value })} /></div>
-                <div><label htmlFor="project-due">Fecha de entrega</label><input id="project-due" type="date" min={projectForm.start_date || undefined} value={projectForm.due_date} onChange={(event) => setProjectForm({ ...projectForm, due_date: event.target.value })} /></div>
+                <div><label htmlFor="project-due">Fecha estimada de término</label><input id="project-due" type="date" min={projectForm.start_date || undefined} value={projectForm.due_date} onChange={(event) => setProjectForm({ ...projectForm, due_date: event.target.value })} /></div>
               </div>
               <button type="submit" disabled={savingProject || clients.length === 0}>{savingProject ? "Guardando…" : "Guardar trabajo"}</button>
             </form>
@@ -2010,6 +2034,12 @@ function Dashboard({ session }) {
 
             {requests.find((request) => request.project_id === selectedProject.id) && <div className="project-source-request"><span>Solicitud de origen</span><strong>{requests.find((request) => request.project_id === selectedProject.id).request_code}</strong></div>}
 
+            {["admin", "manager", "supervisor"].includes(profile?.role) && <section className={`project-publication-card ${selectedProject.is_public ? "is-published" : ""}`}>
+              <div><strong>{selectedProject.is_public ? "Visible en la página pública" : "Publicación en el sitio web"}</strong><span>{selectedProject.status === "completed" ? "Elige las fotografías públicas, revisa el texto y publica cuando esté listo." : "Disponible cuando el proyecto esté finalizado."}</span></div>
+              <textarea rows="3" maxLength={1200} value={selectedProject.public_description ?? selectedProject.description ?? ""} onChange={(event) => setSelectedProject((current) => ({ ...current, public_description: event.target.value }))} placeholder="Descripción que verán los visitantes" disabled={selectedProject.status !== "completed"} />
+              <div className="project-publication-actions"><button type="button" onClick={() => updateProjectPublication(true)} disabled={savingPublication || selectedProject.status !== "completed"}>{savingPublication ? "Guardando…" : selectedProject.is_public ? "Guardar cambios" : "Publicar proyecto"}</button>{selectedProject.is_public && <button type="button" className="project-unpublish-button" onClick={() => updateProjectPublication(false)} disabled={savingPublication}>Retirar del sitio</button>}</div>
+            </section>}
+
             {editingProject && projectEditForm && <form className="internal-form internal-client-form project-edit-form" onSubmit={updateProject}>
               <label htmlFor="edit-project-name">Nombre del trabajo *</label>
               <input id="edit-project-name" value={projectEditForm.name} onChange={(event) => setProjectEditForm({ ...projectEditForm, name: event.target.value })} required />
@@ -2024,28 +2054,23 @@ function Dashboard({ session }) {
               </select>
               <label htmlFor="edit-project-manager">Responsable o supervisor</label>
               <select id="edit-project-manager" value={projectEditForm.manager_id} onChange={(event) => setProjectEditForm({ ...projectEditForm, manager_id: event.target.value })}><option value="">Por asignar</option>{team.filter((member) => member.active).map((member) => <option key={member.id} value={member.id}>{member.full_name} — {ROLE_LABELS[member.role] || member.role}</option>)}</select>
-              <div className="internal-form-columns">
-                <div><label htmlFor="edit-project-amount">Monto</label><input id="edit-project-amount" type="number" min="0" step="0.01" value={projectEditForm.amount} onChange={(event) => setProjectEditForm({ ...projectEditForm, amount: event.target.value })} /></div>
-                <div><label htmlFor="edit-project-currency">Moneda</label><select id="edit-project-currency" value={projectEditForm.currency} onChange={(event) => setProjectEditForm({ ...projectEditForm, currency: event.target.value })}><option value="MXN">MXN — Pesos</option><option value="USD">USD — Dólares</option></select></div>
-              </div>
               <label htmlFor="edit-project-status">Estado</label>
               <select id="edit-project-status" value={projectEditForm.status} onChange={(event) => setProjectEditForm({ ...projectEditForm, status: event.target.value })}>{Object.entries(STATUS_LABELS).filter(([value]) => value !== "completed" || canCompleteSelectedProject || selectedProject.status === "completed").map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
               <div className="internal-form-columns">
-                <div><label htmlFor="edit-project-start">Inicio</label><input id="edit-project-start" type="date" value={projectEditForm.start_date} onChange={(event) => setProjectEditForm({ ...projectEditForm, start_date: event.target.value })} /></div>
-                <div><label htmlFor="edit-project-due">Entrega</label><input id="edit-project-due" type="date" min={projectEditForm.start_date || undefined} value={projectEditForm.due_date} onChange={(event) => setProjectEditForm({ ...projectEditForm, due_date: event.target.value })} /></div>
+                <div><label htmlFor="edit-project-start">Fecha de inicio</label><input id="edit-project-start" type="date" value={projectEditForm.start_date} onChange={(event) => setProjectEditForm({ ...projectEditForm, start_date: event.target.value })} /></div>
+                <div><label htmlFor="edit-project-due">Fecha estimada de término</label><input id="edit-project-due" type="date" min={projectEditForm.start_date || undefined} value={projectEditForm.due_date} onChange={(event) => setProjectEditForm({ ...projectEditForm, due_date: event.target.value })} /></div>
               </div>
               <button type="submit" disabled={savingProject}>{savingProject ? "Guardando…" : "Guardar cambios"}</button>
             </form>}
 
             {!editingProject && <dl className="internal-detail-list">
               <div><dt>Servicio</dt><dd>{selectedProject.service || "Sin especificar"}</dd></div>
-              <div><dt>Monto</dt><dd><strong>{formatMoney(selectedProject.amount, selectedProject.currency)}</strong></dd></div>
               <div><dt>Estado</dt><dd>{STATUS_LABELS[selectedProject.status] || selectedProject.status}</dd></div>
               <div><dt>Responsable</dt><dd>{selectedProject.manager?.full_name || "Por asignar"}</dd></div>
               <div><dt>Ubicación</dt><dd>{selectedProject.work_locations?.name || "Por definir"}</dd></div>
               <div><dt>Inicio</dt><dd>{selectedProject.start_date || "Por definir"}</dd></div>
-              <div><dt>Entrega</dt><dd>{selectedProject.due_date || "Por definir"}</dd></div>
-              {selectedProject.completed_at && <div><dt>Finalizado</dt><dd>{formatDate(selectedProject.completed_at)}</dd></div>}
+              <div><dt>Término estimado</dt><dd>{selectedProject.due_date || "Por definir"}</dd></div>
+              {selectedProject.completed_at && <div><dt>Finalización real</dt><dd>{formatDate(selectedProject.completed_at)}</dd></div>}
             </dl>}
 
             <section className="project-progress-card" aria-label="Avance de órdenes de trabajo">
@@ -2149,7 +2174,7 @@ function Dashboard({ session }) {
                   <div className="project-photo-grid">
                     {projectPhotos.map((photo) => <article key={photo.id}>
                       <a href={photo.url} target="_blank" rel="noreferrer" title={photo.file_name}><img src={photo.url} alt={photo.description || photo.file_name} loading="lazy" /></a>
-                      {canEditOperations ? <div className="project-photo-caption"><textarea rows="2" maxLength={500} value={photo.description || ""} onChange={(event) => setProjectPhotos((current) => current.map((item) => item.id === photo.id ? { ...item, description: event.target.value } : item))} placeholder="Describe la actividad mostrada…" /><div className="project-photo-caption-actions">{["admin", "manager", "supervisor"].includes(profile?.role) && <button type="button" className="project-photo-delete" onClick={() => deleteProjectPhoto(photo)} disabled={deletingPhotoId === photo.id}><Trash2 size={14} /> {deletingPhotoId === photo.id ? "Eliminando…" : "Eliminar"}</button>}<button type="button" onClick={() => updatePhotoDescription(photo)} disabled={savingPhotoId === photo.id}>{savingPhotoId === photo.id ? "Guardando…" : "Guardar texto"}</button></div></div> : <p>{photo.description || "Sin descripción"}</p>}
+                      {canEditOperations ? <div className="project-photo-caption"><textarea rows="2" maxLength={500} value={photo.description || ""} onChange={(event) => setProjectPhotos((current) => current.map((item) => item.id === photo.id ? { ...item, description: event.target.value } : item))} placeholder="Describe la actividad mostrada…" />{["admin", "manager", "supervisor"].includes(profile?.role) && <label className="project-photo-public-toggle"><input type="checkbox" checked={Boolean(photo.is_public)} onChange={() => togglePhotoPublication(photo)} disabled={savingPhotoId === photo.id} /><span>Mostrar esta foto en la página pública</span></label>}<div className="project-photo-caption-actions">{["admin", "manager", "supervisor"].includes(profile?.role) && <button type="button" className="project-photo-delete" onClick={() => deleteProjectPhoto(photo)} disabled={deletingPhotoId === photo.id}><Trash2 size={14} /> {deletingPhotoId === photo.id ? "Eliminando…" : "Eliminar"}</button>}<button type="button" onClick={() => updatePhotoDescription(photo)} disabled={savingPhotoId === photo.id}>{savingPhotoId === photo.id ? "Guardando…" : "Guardar texto"}</button></div></div> : <p>{photo.description || "Sin descripción"}</p>}
                     </article>)}
                   </div>
                 )}
@@ -2222,9 +2247,9 @@ function Dashboard({ session }) {
                 <div><dt>Responsable</dt><dd>{selectedProject.manager?.full_name || "Por asignar"}</dd></div>
                 <div><dt>Ubicación</dt><dd>{selectedProject.work_locations?.name || "Por definir"}</dd></div>
                 <div><dt>Periodo</dt><dd>{selectedProject.start_date || "Por definir"} a {selectedProject.due_date || "Por definir"}</dd></div>
-                <div><dt>Monto</dt><dd>{formatMoney(selectedProject.amount, selectedProject.currency)}</dd></div>
                 <div><dt>Estado</dt><dd>{STATUS_LABELS[selectedProject.status] || selectedProject.status}</dd></div>
                 <div><dt>Avance</dt><dd>{projectProgress}%</dd></div>
+                <div><dt>Finalización real</dt><dd>{selectedProject.completed_at ? formatDate(selectedProject.completed_at) : "Proyecto en curso"}</dd></div>
               </dl>
 
               <section className="project-print-section">
@@ -2303,7 +2328,7 @@ function Dashboard({ session }) {
               <select id="conversion-location" value={conversionForm.location_id} onChange={(event) => setConversionForm({ ...conversionForm, location_id: event.target.value })}><option value="">Por definir</option>{locations.filter((location) => location.status === "active").map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select>
               <label htmlFor="conversion-manager">Responsable o supervisor</label>
               <select id="conversion-manager" value={conversionForm.manager_id} onChange={(event) => setConversionForm({ ...conversionForm, manager_id: event.target.value })}><option value="">Por asignar</option>{team.filter((member) => member.active).map((member) => <option key={member.id} value={member.id}>{member.full_name} — {ROLE_LABELS[member.role] || member.role}</option>)}</select>
-              <div className="internal-form-columns"><div><label htmlFor="conversion-amount">Monto</label><input id="conversion-amount" type="number" min="0" step="0.01" value={conversionForm.amount} onChange={(event) => setConversionForm({ ...conversionForm, amount: event.target.value })} /></div><div><label htmlFor="conversion-currency">Moneda</label><select id="conversion-currency" value={conversionForm.currency} onChange={(event) => setConversionForm({ ...conversionForm, currency: event.target.value })}><option value="MXN">MXN</option><option value="USD">USD</option></select></div></div>
+              <div className="internal-form-columns"><div><label htmlFor="conversion-start">Fecha de inicio</label><input id="conversion-start" type="date" value={conversionForm.start_date} onChange={(event) => setConversionForm({ ...conversionForm, start_date: event.target.value })} /></div><div><label htmlFor="conversion-due">Fecha estimada de término</label><input id="conversion-due" type="date" min={conversionForm.start_date || undefined} value={conversionForm.due_date} onChange={(event) => setConversionForm({ ...conversionForm, due_date: event.target.value })} /></div></div>
               <button type="submit" disabled={savingConversion}>{savingConversion ? "Creando…" : "Crear y vincular"}</button>
             </form>}
 

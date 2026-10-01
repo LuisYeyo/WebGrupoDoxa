@@ -9,6 +9,7 @@ import {
 } from "react-router-dom"
 
 import {
+  useEffect,
   useMemo,
   useState,
 } from "react"
@@ -80,6 +81,19 @@ const filters = [
   },
 ]
 
+function publicServiceCategory(value = "") {
+  const service = value.toLocaleLowerCase("es-MX")
+  if (service.includes("tuber") || service.includes("piping")) return "piping"
+  if (service.includes("estructura") || service.includes("plataforma")) return "structures"
+  if (service.includes("fabric")) return "fabrication"
+  if (service.includes("tanque") || service.includes("equipo")) return "tanks"
+  if (service.includes("aisla")) return "insulation"
+  if (service.includes("manten")) return "maintenance"
+  if (service.includes("perfora")) return "drilling"
+  if (service.includes("sandblast") || service.includes("pintura")) return "sandblast"
+  return "all"
+}
+
 
 function Projects() {
 
@@ -94,6 +108,29 @@ function Projects() {
     setActiveFilter,
   ] = useState("all")
 
+  const [publishedProjects, setPublishedProjects] = useState([])
+
+  useEffect(() => {
+    let active = true
+    fetch("/api/public/projects")
+      .then((response) => response.ok ? response.json() : { projects: [] })
+      .then(({ projects: rows = [] }) => {
+        if (!active) return
+        setPublishedProjects(rows.filter((project) => project.image).map((project) => ({
+          ...project,
+          service: publicServiceCategory(project.service),
+          title: { es: project.title, en: project.title },
+          location: { es: project.location, en: project.location },
+          serviceLabel: { es: project.service, en: project.service },
+          work: { es: project.description, en: project.description },
+        })))
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
+
+  const allProjects = useMemo(() => [...publishedProjects, ...projects], [publishedProjects])
+
 
   const filteredProjects =
     useMemo(
@@ -103,10 +140,10 @@ function Projects() {
           activeFilter ===
           "all"
         ) {
-          return projects
+          return allProjects
         }
 
-        return projects.filter(
+        return allProjects.filter(
           (project) =>
             project.service ===
             activeFilter
@@ -115,6 +152,7 @@ function Projects() {
       },
       [
         activeFilter,
+        allProjects,
       ]
     )
 
