@@ -515,6 +515,7 @@ function Dashboard({ session }) {
   const [searchTerm, setSearchTerm] = useState("")
   const [listStatus, setListStatus] = useState("all")
   const [savingStatus, setSavingStatus] = useState(false)
+  const [deletingRequest, setDeletingRequest] = useState(false)
   const [savingConversion, setSavingConversion] = useState(false)
   const [clients, setClients] = useState([])
   const [projects, setProjects] = useState([])
@@ -971,6 +972,34 @@ function Dashboard({ session }) {
     }
 
     setSavingStatus(false)
+  }
+
+  const deleteRequest = async () => {
+    if (!selectedRequest || profile?.role !== "admin") return
+
+    const linkedProjectNotice = selectedRequest.project_id
+      ? " El proyecto vinculado se conservará."
+      : ""
+    const confirmed = window.confirm(
+      `¿Eliminar definitivamente la solicitud ${selectedRequest.request_code}?${linkedProjectNotice} Esta acción quedará registrada en el historial.`
+    )
+    if (!confirmed) return
+
+    setDeletingRequest(true)
+    setError("")
+    const { error: deleteError } = await supabase
+      .from("quote_requests")
+      .delete()
+      .eq("id", selectedRequest.id)
+
+    if (deleteError) {
+      setError("No fue posible eliminar la solicitud. Verifica que la política de seguridad esté actualizada.")
+    } else {
+      setRequests((current) => current.filter((item) => item.id !== selectedRequest.id))
+      setSelectedRequest(null)
+      setConvertingRequest(false)
+    }
+    setDeletingRequest(false)
   }
 
   const beginRequestConversion = () => {
@@ -2340,6 +2369,9 @@ function Dashboard({ session }) {
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+            {profile?.role === "admin" && <button type="button" className="request-delete-button" onClick={deleteRequest} disabled={deletingRequest}>
+              <Trash2 size={17} /> {deletingRequest ? "Eliminando…" : "Eliminar solicitud"}
+            </button>}
           </aside>
         </div>
       )}
