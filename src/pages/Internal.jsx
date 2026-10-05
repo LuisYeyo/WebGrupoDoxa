@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Bell, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileDown, FileText, History, Lightbulb, LogOut, Mail, Menu, Pencil, Plus, Printer, RefreshCw, Search, ShieldCheck, Trash2, Upload, Users, Wrench, X } from "lucide-react"
+import { Bell, Building2, CalendarDays, Camera, Check, ChevronRight, ClipboardList, Download, Eye, EyeOff, FileDown, FileText, History, Lightbulb, LogOut, Mail, Menu, Pencil, Plus, Printer, RefreshCw, Search, ShieldCheck, Trash2, Upload, Users, Wrench, X } from "lucide-react"
 import doxaLogo from "../assets/logos/Grupo industrial DOXA.png"
 import Turnstile from "../components/ui/Turnstile"
 import { hasAuthSetupParams, isSupabaseConfigured, supabase } from "../utils/supabase"
@@ -519,6 +519,7 @@ function Dashboard({ session }) {
   const [savingConversion, setSavingConversion] = useState(false)
   const [clients, setClients] = useState([])
   const [projects, setProjects] = useState([])
+  const [projectAssignees, setProjectAssignees] = useState([])
   const [locations, setLocations] = useState([])
   const [equipment, setEquipment] = useState([])
   const [projectEquipment, setProjectEquipment] = useState([])
@@ -585,18 +586,13 @@ function Dashboard({ session }) {
   const nextThirtyDays = new Date(dashboardDate.getTime() + 30 * 86400000).toISOString().slice(0, 10)
   const nextSevenDays = new Date(dashboardDate.getTime() + 7 * 86400000).toISOString().slice(0, 10)
   const openProjectStatuses = ["lead", "quoted", "approved", "in_progress", "on_hold"]
-  const openWorkOrderStatuses = ["pending", "scheduled", "in_progress", "blocked"]
   const activeProjects = projects.filter((project) => openProjectStatuses.includes(project.status))
-  const overdueWorkOrders = workOrders.filter((order) => order.due_date && order.due_date < today && openWorkOrderStatuses.includes(order.status))
   const upcomingProjects = projects.filter((project) => project.due_date && project.due_date >= today && project.due_date <= nextThirtyDays && openProjectStatuses.includes(project.status)).sort((a, b) => a.due_date.localeCompare(b.due_date))
   const upcomingMaintenance = equipment.filter((item) => item.next_maintenance_date && item.next_maintenance_date >= today && item.next_maintenance_date <= nextThirtyDays && item.status === "active").sort((a, b) => a.next_maintenance_date.localeCompare(b.next_maintenance_date))
   const myProjects = activeProjects.filter((project) => project.manager?.id === session.user.id).sort((a, b) => (a.due_date || "9999-12-31").localeCompare(b.due_date || "9999-12-31"))
-  const myWorkOrders = workOrders.filter((order) => order.assigned_to === session.user.id && openWorkOrderStatuses.includes(order.status))
-  const myOverdueOrders = myWorkOrders.filter((order) => order.due_date && order.due_date < today)
-  const myUpcomingOrders = myWorkOrders.filter((order) => order.due_date && order.due_date >= today && order.due_date <= nextSevenDays)
   const myUpcomingProjectDeliveries = myProjects.filter((project) => project.due_date && project.due_date >= today && project.due_date <= nextSevenDays)
   const newRequestAlerts = ["admin", "manager", "supervisor"].includes(profile?.role) ? requests.filter((request) => request.status === "lead") : []
-  const notificationCount = myOverdueOrders.length + myUpcomingOrders.length + myUpcomingProjectDeliveries.length + newRequestAlerts.length
+  const notificationCount = myUpcomingProjectDeliveries.length + newRequestAlerts.length
   const activeRequests = requests.filter((request) => !["completed", "cancelled"].includes(request.status))
   const finishedRequests = requests.filter((request) => ["completed", "cancelled"].includes(request.status))
   const normalizedSearch = searchTerm.trim().toLocaleLowerCase("es-MX")
@@ -611,14 +607,8 @@ function Dashboard({ session }) {
   const visibleWorkOrders = workOrders.filter((order) => matchesStatus(order.status, WORK_ORDER_STATUS_LABELS) && includesSearch(order.code, order.title, order.description, order.projects?.code, order.projects?.name, order.profiles?.full_name))
   const visibleProjects = projects.filter((project) => matchesStatus(project.status, STATUS_LABELS) && includesSearch(project.code, project.name, project.service, project.clients?.legal_name, project.clients?.tax_id, project.work_locations?.name))
   const selectedProjectOrders = selectedProject ? workOrders.filter((order) => order.project_id === selectedProject.id) : []
-  const operativeProjectOrders = selectedProjectOrders.filter((order) => order.status !== "cancelled")
-  const completedProjectOrders = operativeProjectOrders.filter((order) => order.status === "completed").length
-  const projectProgress = operativeProjectOrders.length ? Math.round((completedProjectOrders / operativeProjectOrders.length) * 100) : 0
-  const projectAssignees = [...new Set(operativeProjectOrders.map((order) => order.profiles?.full_name).filter(Boolean))]
-  const projectHasQuote = projectDocuments.some((document) => document.category === "quote") || (selectedProject && selectedProject.status !== "lead")
-  const projectHasReport = projectDocuments.some((document) => document.category === "inspection_report")
-  const projectHasInvoice = projectDocuments.some((document) => document.category === "invoice")
-  const canCompleteSelectedProject = operativeProjectOrders.length > 0 && completedProjectOrders === operativeProjectOrders.length
+  const projectProgress = selectedProject?.progress_percent ?? 0
+  const getProjectAssigneeNames = (projectId) => projectAssignees.filter((item) => item.project_id === projectId).map((item) => item.profiles?.full_name).filter(Boolean)
 
   const exportWorkOrdersCsv = () => {
     const headings = ["Folio", "Orden", "Proyecto", "Folio del proyecto", "Responsable", "Estado", "Programada", "Entrega"]
@@ -661,6 +651,11 @@ function Dashboard({ session }) {
       status: project.status,
       start_date: project.start_date || "",
       due_date: project.due_date || "",
+      progress_percent: project.progress_percent ?? 0,
+      quote_completed: Boolean(project.quote_completed),
+      report_completed: Boolean(project.report_completed),
+      invoice_completed: Boolean(project.invoice_completed),
+      assignee_ids: projectAssignees.filter((item) => item.project_id === project.id).map((item) => item.profile_id),
     })
     setProjectLessons([])
     setProjectPhotos([])
@@ -727,6 +722,7 @@ function Dashboard({ session }) {
       setError("No fue posible actualizar la visita de obra. Verifica que la migración esté instalada.")
     } else {
       setSelectedProject((current) => ({ ...current, ...data }))
+      setProjects((current) => current.map((project) => project.id === selectedProject.id ? { ...project, ...data } : project))
     }
     setSavingProjectTracking(false)
   }
@@ -936,7 +932,7 @@ function Dashboard({ session }) {
     setLoading(true)
     setError("")
 
-    const [profileResult, requestResult, clientResult, projectResult, locationResult, equipmentResult, workOrderResult, teamResult] = await Promise.all([
+    const [profileResult, requestResult, clientResult, projectResult, locationResult, equipmentResult, workOrderResult, teamResult, trackingResult, assigneeResult] = await Promise.all([
       supabase.from("profiles").select("full_name, role, active")
         .eq("id", session.user.id).single(),
       supabase.from("quote_requests")
@@ -961,6 +957,8 @@ function Dashboard({ session }) {
         .select("id, full_name, role, active")
         .eq("active", true)
         .order("full_name"),
+      supabase.from("projects").select("id, site_visit_completed_at, site_visit_completed_by, progress_percent, quote_completed, report_completed, invoice_completed"),
+      supabase.from("project_assignees").select("project_id, profile_id, profiles(full_name)"),
     ])
 
     if (profileResult.error || requestResult.error || clientResult.error || projectResult.error || locationResult.error || equipmentResult.error || workOrderResult.error || teamResult.error) {
@@ -969,7 +967,9 @@ function Dashboard({ session }) {
       setProfile(profileResult.data)
       setRequests(requestResult.data ?? [])
       setClients(clientResult.data ?? [])
-      setProjects(projectResult.data ?? [])
+      const trackingByProject = new Map((trackingResult.data ?? []).map((item) => [item.id, item]))
+      setProjects((projectResult.data ?? []).map((project) => ({ ...project, ...(trackingByProject.get(project.id) || {}) })))
+      setProjectAssignees(assigneeResult.data ?? [])
       setLocations(locationResult.data ?? [])
       setEquipment(equipmentResult.data ?? [])
       setWorkOrders(workOrderResult.data ?? [])
@@ -1212,6 +1212,10 @@ function Dashboard({ session }) {
       start_date: projectEditForm.start_date || null,
       due_date: projectEditForm.due_date || null,
       completed_at: completedAt,
+      progress_percent: Number(projectEditForm.progress_percent) || 0,
+      quote_completed: projectEditForm.quote_completed,
+      report_completed: projectEditForm.report_completed,
+      invoice_completed: projectEditForm.invoice_completed,
     }).eq("id", selectedProject.id)
       .select("id, code, name, service, description, amount, currency, status, start_date, due_date, completed_at, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)")
       .single()
@@ -1219,8 +1223,28 @@ function Dashboard({ session }) {
     if (updateError) {
       setError("No fue posible actualizar el proyecto. Revisa los datos y las fechas.")
     } else {
-      setProjects((current) => current.map((project) => project.id === data.id ? data : project))
-      setSelectedProject(data)
+      const trackingData = {
+        progress_percent: Number(projectEditForm.progress_percent) || 0,
+        quote_completed: projectEditForm.quote_completed,
+        report_completed: projectEditForm.report_completed,
+        invoice_completed: projectEditForm.invoice_completed,
+      }
+      const { error: removeAssigneesError } = await supabase.from("project_assignees").delete().eq("project_id", data.id)
+      let assignmentError = removeAssigneesError
+      if (!assignmentError && projectEditForm.assignee_ids.length) {
+        const { error: insertAssigneesError } = await supabase.from("project_assignees").insert(projectEditForm.assignee_ids.map((profileId) => ({ project_id: data.id, profile_id: profileId, assigned_by: session.user.id })))
+        assignmentError = insertAssigneesError
+      }
+      if (assignmentError) {
+        setError("El proyecto se actualizó, pero no fue posible guardar el personal asignado.")
+      } else {
+        setProjectAssignees((current) => [
+          ...current.filter((item) => item.project_id !== data.id),
+          ...projectEditForm.assignee_ids.map((profileId) => ({ project_id: data.id, profile_id: profileId, profiles: { full_name: team.find((member) => member.id === profileId)?.full_name || "Personal" } })),
+        ])
+      }
+      setProjects((current) => current.map((project) => project.id === data.id ? { ...project, ...data, ...trackingData } : project))
+      setSelectedProject((current) => ({ ...current, ...data, ...trackingData }))
       setEditingProject(false)
       if (data.status === "completed" && ["admin", "manager", "supervisor"].includes(profile?.role)) {
         const { error: requestError } = await supabase.from("quote_requests").update({ status: "completed" }).eq("project_id", data.id)
@@ -1230,13 +1254,13 @@ function Dashboard({ session }) {
     setSavingProject(false)
   }
 
-  const completeProject = async () => {
-    if (!selectedProject || !canEditOperations || !canCompleteSelectedProject) return
+  const completeProject = async (projectToComplete = selectedProject) => {
+    if (!projectToComplete || !canEditOperations || projectToComplete.status === "completed") return
 
     setSavingProject(true)
     setError("")
     const completedAt = new Date().toISOString()
-    const { data, error: updateError } = await supabase.from("projects").update({ status: "completed", completed_at: completedAt }).eq("id", selectedProject.id)
+    const { data, error: updateError } = await supabase.from("projects").update({ status: "completed", completed_at: completedAt, progress_percent: 100 }).eq("id", projectToComplete.id)
       .select("id, code, name, service, description, amount, currency, status, start_date, due_date, completed_at, created_at, clients(legal_name, tax_id), work_locations(id, name, kind, workshop_number, city, state), manager:profiles!projects_manager_id_fkey(id, full_name)")
       .single()
 
@@ -1246,8 +1270,8 @@ function Dashboard({ session }) {
       return
     }
 
-    setProjects((current) => current.map((project) => project.id === data.id ? data : project))
-    setSelectedProject(data)
+    setProjects((current) => current.map((project) => project.id === data.id ? { ...project, ...data, progress_percent: 100 } : project))
+    setSelectedProject((current) => current?.id === data.id ? { ...current, ...data, progress_percent: 100 } : current)
 
     if (["admin", "manager", "supervisor"].includes(profile?.role)) {
       const { error: requestError } = await supabase.from("quote_requests").update({ status: "completed" }).eq("project_id", data.id)
@@ -1582,7 +1606,6 @@ function Dashboard({ session }) {
         <button type="button" className={activeModule === "clients" ? "active" : ""} onClick={() => setActiveModule("clients")}>Clientes</button>
         <button type="button" className={activeModule === "locations" ? "active" : ""} onClick={() => setActiveModule("locations")}>Talleres y ubicaciones</button>
         <button type="button" className={activeModule === "equipment" ? "active" : ""} onClick={() => setActiveModule("equipment")}>Maquinaria y equipo</button>
-        <button type="button" className={activeModule === "workOrders" ? "active" : ""} onClick={() => setActiveModule("workOrders")}>Órdenes de trabajo</button>
         {["admin", "manager", "supervisor"].includes(profile?.role) && <button type="button" className={activeModule === "activity" ? "active" : ""} onClick={() => setActiveModule("activity")}>Actividad</button>}
         {profile?.role === "admin" && <button type="button" className={activeModule === "users" ? "active" : ""} onClick={() => setActiveModule("users")}>Personal</button>}
         <button type="button" className={activeModule === "projects" ? "active" : ""} onClick={() => setActiveModule("projects")}>Proyectos</button>
@@ -1590,7 +1613,7 @@ function Dashboard({ session }) {
 
       <nav className="internal-mobile-nav" aria-label="Accesos móviles">
         <button type="button" className={activeModule === "dashboard" ? "active" : ""} onClick={() => openModule("dashboard")}><Building2 size={20} /><span>Inicio</span></button>
-        <button type="button" className={activeModule === "workOrders" ? "active" : ""} onClick={() => openModule("workOrders")}><ClipboardList size={20} /><span>Órdenes</span></button>
+        <button type="button" className={activeModule === "requests" ? "active" : ""} onClick={() => openModule("requests")}><Mail size={20} /><span>Solicitudes</span></button>
         <button type="button" className={activeModule === "projects" ? "active" : ""} onClick={() => openModule("projects")}><FileText size={20} /><span>Proyectos</span></button>
         <button type="button" className={showMobileMenu || ["requests", "clients", "locations", "equipment", "activity", "users"].includes(activeModule) ? "active" : ""} onClick={() => setShowMobileMenu(true)}><Menu size={20} /><span>Más</span></button>
       </nav>
@@ -1598,8 +1621,6 @@ function Dashboard({ session }) {
       {showMobileMenu && <div className="internal-mobile-menu-backdrop" onClick={() => setShowMobileMenu(false)}><section className="internal-mobile-menu" onClick={(event) => event.stopPropagation()} aria-label="Más módulos"><div className="internal-mobile-menu-heading"><strong>Más módulos</strong><button type="button" onClick={() => setShowMobileMenu(false)} aria-label="Cerrar"><X size={20} /></button></div><button type="button" onClick={() => openModule("requests")}><Mail size={19} /> Solicitudes</button><button type="button" onClick={() => openModule("clients")}><Users size={19} /> Clientes</button><button type="button" onClick={() => openModule("locations")}><Building2 size={19} /> Talleres y ubicaciones</button><button type="button" onClick={() => openModule("equipment")}><Wrench size={19} /> Maquinaria y equipo</button>{["admin", "manager", "supervisor"].includes(profile?.role) && <button type="button" onClick={() => openModule("activity")}><History size={19} /> Actividad</button>}{profile?.role === "admin" && <button type="button" onClick={() => openModule("users")}><ShieldCheck size={19} /> Personal</button>}</section></div>}
 
       {showNotifications && <div className="internal-drawer-backdrop" onClick={() => setShowNotifications(false)}><aside className="internal-drawer internal-notification-drawer" onClick={(event) => event.stopPropagation()} aria-label="Centro de avisos"><button type="button" className="internal-drawer-close" onClick={() => setShowNotifications(false)} aria-label="Cerrar"><X size={20} /></button><p className="internal-eyebrow">SEGUIMIENTO</p><h2>Avisos</h2><p className="internal-drawer-company">Pendientes que requieren tu atención.</p><div className="internal-notification-list">
-        {myOverdueOrders.map((order) => <button type="button" key={`overdue-${order.id}`} onClick={() => { setSearchTerm(order.code); setListStatus("all"); setActiveModule("workOrders"); setShowNotifications(false) }}><AlertTriangle size={19} /><div><strong>Orden vencida</strong><span>{order.title} · venció {order.due_date}</span></div><ChevronRight size={17} /></button>)}
-        {myUpcomingOrders.map((order) => <button type="button" key={`order-${order.id}`} onClick={() => { setSearchTerm(order.code); setListStatus("all"); setActiveModule("workOrders"); setShowNotifications(false) }}><CalendarDays size={19} /><div><strong>Entrega próxima</strong><span>{order.title} · {order.due_date}</span></div><ChevronRight size={17} /></button>)}
         {myUpcomingProjectDeliveries.map((project) => <button type="button" key={`project-${project.id}`} onClick={() => { setShowNotifications(false); openProject(project) }}><Building2 size={19} /><div><strong>Proyecto por entregar</strong><span>{project.name} · {project.due_date}</span></div><ChevronRight size={17} /></button>)}
         {newRequestAlerts.slice(0, 8).map((request) => <button type="button" key={`request-${request.id}`} onClick={() => { setSelectedRequest(request); setConvertingRequest(false); setShowNotifications(false) }}><Mail size={19} /><div><strong>Nueva solicitud</strong><span>{request.requester_name} · {request.service}</span></div><ChevronRight size={17} /></button>)}
         {notificationCount === 0 && <div className="internal-notification-empty"><Check size={24} /><strong>Todo al día</strong><span>No tienes avisos pendientes.</span></div>}
@@ -1648,7 +1669,6 @@ function Dashboard({ session }) {
         {!["users", "activity"].includes(activeModule) && <div className="internal-summary-grid">
           {activeModule === "dashboard" ? <>
             <article><ClipboardList size={22} /><div><strong>{activeProjects.length}</strong><span>Proyectos activos</span></div></article>
-            <article><AlertTriangle size={22} /><div><strong>{overdueWorkOrders.length}</strong><span>Órdenes vencidas</span></div></article>
             <article><CalendarDays size={22} /><div><strong>{upcomingProjects.length}</strong><span>Entregas en 30 días</span></div></article>
             <article><Wrench size={22} /><div><strong>{upcomingMaintenance.length}</strong><span>Mantenimientos próximos</span></div></article>
           </> : activeModule === "requests" ? <>
@@ -1691,10 +1711,6 @@ function Dashboard({ session }) {
             <div className="dashboard-panel-heading"><div><Building2 size={20} /><h2>Proyectos a mi cargo</h2></div><button type="button" onClick={() => setActiveModule("projects")}>Ver proyectos</button></div>
             {myProjects.length === 0 ? <p className="dashboard-empty">No tienes proyectos activos asignados como responsable.</p> : <div className="dashboard-list">{myProjects.slice(0, 6).map((project) => <article key={project.id} className="dashboard-clickable-card" role="button" tabIndex="0" onClick={() => openProject(project)} onKeyDown={(event) => { if (["Enter", " "].includes(event.key)) openProject(project) }}><div><strong>{project.name}</strong><span>{project.clients?.legal_name || "Sin cliente"} · {project.code}</span></div><div><span className={`internal-status status-${project.status}`}>{STATUS_LABELS[project.status]}</span><small>{project.due_date ? `Entrega ${project.due_date}` : "Sin fecha de entrega"}</small></div></article>)}</div>}
           </section>
-          <section className="dashboard-panel dashboard-panel-wide">
-            <div className="dashboard-panel-heading"><div><ClipboardList size={20} /><h2>Mis órdenes pendientes</h2></div><button type="button" onClick={() => setActiveModule("workOrders")}>Ver todas</button></div>
-            {myWorkOrders.length === 0 ? <p className="dashboard-empty">No tienes órdenes pendientes asignadas.</p> : <div className="dashboard-list">{myWorkOrders.slice(0, 6).map((order) => <article key={order.id}><div><strong>{order.title}</strong><span>{order.projects?.name || "Proyecto"} · {order.code}</span></div><div><span className={`internal-status status-${order.status}`}>{WORK_ORDER_STATUS_LABELS[order.status]}</span><small>{order.due_date ? `Entrega ${order.due_date}` : "Sin fecha de entrega"}</small></div></article>)}</div>}
-          </section>
           <section className="dashboard-panel">
             <div className="dashboard-panel-heading"><div><CalendarDays size={20} /><h2>Próximas entregas</h2></div></div>
             {upcomingProjects.length === 0 ? <p className="dashboard-empty">No hay entregas en los próximos 30 días.</p> : <div className="dashboard-compact-list">{upcomingProjects.slice(0, 6).map((project) => <button type="button" key={project.id} onClick={() => openProject(project)}><div><strong>{project.name}</strong><span>{project.clients?.legal_name || "Sin cliente"}</span></div><time>{project.due_date}</time></button>)}</div>}
@@ -1703,7 +1719,6 @@ function Dashboard({ session }) {
             <div className="dashboard-panel-heading"><div><Wrench size={20} /><h2>Mantenimiento próximo</h2></div></div>
             {upcomingMaintenance.length === 0 ? <p className="dashboard-empty">No hay mantenimientos programados en 30 días.</p> : <div className="dashboard-compact-list">{upcomingMaintenance.slice(0, 6).map((item) => <button type="button" key={item.id} onClick={() => ["admin", "manager", "supervisor"].includes(profile?.role) && setEditingEquipment({ ...item })}><div><strong>{item.name}</strong><span>{item.internal_code} · {item.work_locations?.name || "Sin ubicación"}</span></div><time>{item.next_maintenance_date}</time></button>)}</div>}
           </section>
-          {overdueWorkOrders.length > 0 && <section className="dashboard-panel dashboard-panel-wide dashboard-warning-panel"><div className="dashboard-panel-heading"><div><AlertTriangle size={20} /><h2>Órdenes vencidas</h2></div></div><div className="dashboard-list">{overdueWorkOrders.slice(0, 6).map((order) => <article key={order.id}><div><strong>{order.title}</strong><span>{order.projects?.name || "Proyecto"} · {order.profiles?.full_name || "Sin responsable"}</span></div><div><span className={`internal-status status-${order.status}`}>{WORK_ORDER_STATUS_LABELS[order.status]}</span><small>Venció {order.due_date}</small></div></article>)}</div></section>}
         </div> : <div className="internal-table-card">
           {loading ? (
             <div className="internal-empty">Cargando información…</div>
@@ -1789,17 +1804,21 @@ function Dashboard({ session }) {
             <div className="internal-empty">Todavía no hay proyectos o trabajos registrados.</div>
           ) : (
             <div className="internal-table-wrap"><table>
-              <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Responsable</th><th>Ubicación</th><th>Servicio</th><th>Estado</th><th>Inicio</th><th>Término</th></tr></thead>
+              <thead><tr><th>Folio</th><th>Trabajo</th><th>Cliente / RFC</th><th>Responsable</th><th>Planta</th><th>Visita</th><th>Cotizó</th><th>Asignados</th><th>Avance</th><th>Reporte</th><th>Factura</th><th>Estado</th><th>Acción</th></tr></thead>
               <tbody>{visibleProjects.map((project) => <tr key={project.id} className="internal-clickable-row" onClick={() => openProject(project)}>
                 <td><strong>{project.code}</strong></td>
                 <td>{project.name}</td>
                 <td className="internal-stacked-cell"><strong>{project.clients?.legal_name || "—"}</strong><span>{project.clients?.tax_id || "Sin RFC"}</span></td>
                 <td>{project.manager?.full_name || "Por asignar"}</td>
                 <td>{project.work_locations?.name || "Por definir"}</td>
-                <td>{project.service || "—"}</td>
+                <td><span className={`tracking-badge ${project.site_visit_completed_at ? "done" : "pending"}`}>{project.site_visit_completed_at ? "Sí" : "No"}</span></td>
+                <td><span className={`tracking-badge ${project.quote_completed ? "done" : "pending"}`}>{project.quote_completed ? "Sí" : "No"}</span></td>
+                <td className="project-assignees-cell">{getProjectAssigneeNames(project.id).join(", ") || "Por asignar"}</td>
+                <td><div className="project-list-progress"><strong>{project.progress_percent ?? 0}%</strong><span><i style={{ width: `${project.progress_percent ?? 0}%` }} /></span></div></td>
+                <td><span className={`tracking-badge ${project.report_completed ? "done" : "pending"}`}>{project.report_completed ? "Sí" : "No"}</span></td>
+                <td><span className={`tracking-badge ${project.invoice_completed ? "done" : "pending"}`}>{project.invoice_completed ? "Sí" : "No"}</span></td>
                 <td><span className={`internal-status status-${project.status}`}>{STATUS_LABELS[project.status] || project.status}</span></td>
-                <td>{project.start_date || "Por definir"}</td>
-                <td>{project.completed_at ? formatDate(project.completed_at) : project.due_date || "Por definir"}</td>
+                <td>{project.status === "completed" ? <span className="project-finished-label"><Check size={15} /> Terminado</span> : canEditOperations ? <button type="button" className="project-finish-row-button" onClick={(event) => { event.stopPropagation(); completeProject(project) }} disabled={savingProject}><Check size={15} /> Terminar</button> : "—"}</td>
               </tr>)}</tbody>
             </table></div>
           )}
@@ -2111,11 +2130,19 @@ function Dashboard({ session }) {
               <label htmlFor="edit-project-manager">Responsable o supervisor</label>
               <select id="edit-project-manager" value={projectEditForm.manager_id} onChange={(event) => setProjectEditForm({ ...projectEditForm, manager_id: event.target.value })}><option value="">Por asignar</option>{team.filter((member) => member.active).map((member) => <option key={member.id} value={member.id}>{member.full_name} — {ROLE_LABELS[member.role] || member.role}</option>)}</select>
               <label htmlFor="edit-project-status">Estado</label>
-              <select id="edit-project-status" value={projectEditForm.status} onChange={(event) => setProjectEditForm({ ...projectEditForm, status: event.target.value })}>{Object.entries(STATUS_LABELS).filter(([value]) => value !== "completed" || canCompleteSelectedProject || selectedProject.status === "completed").map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+              <select id="edit-project-status" value={projectEditForm.status} onChange={(event) => setProjectEditForm({ ...projectEditForm, status: event.target.value })}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
               <div className="internal-form-columns">
                 <div><label htmlFor="edit-project-start">Fecha de inicio</label><input id="edit-project-start" type="date" value={projectEditForm.start_date} onChange={(event) => setProjectEditForm({ ...projectEditForm, start_date: event.target.value })} /></div>
                 <div><label htmlFor="edit-project-due">Fecha estimada de término</label><input id="edit-project-due" type="date" min={projectEditForm.start_date || undefined} value={projectEditForm.due_date} onChange={(event) => setProjectEditForm({ ...projectEditForm, due_date: event.target.value })} /></div>
               </div>
+              <label htmlFor="edit-project-progress">Porcentaje de avance: {projectEditForm.progress_percent}%</label>
+              <input id="edit-project-progress" type="range" min="0" max="100" step="5" value={projectEditForm.progress_percent} onChange={(event) => setProjectEditForm({ ...projectEditForm, progress_percent: Number(event.target.value) })} />
+              <div className="project-tracking-edit-checks">
+                <label><input type="checkbox" checked={projectEditForm.quote_completed} onChange={(event) => setProjectEditForm({ ...projectEditForm, quote_completed: event.target.checked })} /> Cotización realizada</label>
+                <label><input type="checkbox" checked={projectEditForm.report_completed} onChange={(event) => setProjectEditForm({ ...projectEditForm, report_completed: event.target.checked })} /> Reporte terminado</label>
+                <label><input type="checkbox" checked={projectEditForm.invoice_completed} onChange={(event) => setProjectEditForm({ ...projectEditForm, invoice_completed: event.target.checked })} /> Factura generada</label>
+              </div>
+              <fieldset className="project-assignee-picker"><legend>Personal asignado</legend>{team.filter((member) => member.active).map((member) => <label key={member.id}><input type="checkbox" checked={projectEditForm.assignee_ids.includes(member.id)} onChange={(event) => setProjectEditForm((current) => ({ ...current, assignee_ids: event.target.checked ? [...current.assignee_ids, member.id] : current.assignee_ids.filter((id) => id !== member.id) }))} /><span>{member.full_name}</span></label>)}</fieldset>
               <button type="submit" disabled={savingProject}>{savingProject ? "Guardando…" : "Guardar cambios"}</button>
             </form>}
 
@@ -2129,18 +2156,6 @@ function Dashboard({ session }) {
               {selectedProject.completed_at && <div><dt>Finalización real</dt><dd>{formatDate(selectedProject.completed_at)}</dd></div>}
             </dl>}
 
-            <section className="project-progress-card" aria-label="Avance de órdenes de trabajo">
-              <div className="project-progress-heading"><div><span>Avance operativo</span><strong>{projectProgress}%</strong></div><button type="button" onClick={() => { setSearchTerm(selectedProject.code); setListStatus("all"); setActiveModule("workOrders"); setSelectedProject(null) }}>Ver todas las órdenes <ChevronRight size={16} /></button></div>
-              <div className="project-progress-track"><span style={{ width: `${projectProgress}%` }} /></div>
-              <div className="project-progress-stats">
-                <span><strong>{operativeProjectOrders.length}</strong> órdenes</span>
-                <span><strong>{completedProjectOrders}</strong> terminadas</span>
-                <span><strong>{operativeProjectOrders.filter((order) => ["pending", "scheduled"].includes(order.status)).length}</strong> pendientes</span>
-                <span><strong>{operativeProjectOrders.filter((order) => ["in_progress", "blocked"].includes(order.status)).length}</strong> activas</span>
-              </div>
-              {selectedProject.status === "completed" ? <div className="project-completion-note"><Check size={17} /> Proyecto finalizado</div> : canCompleteSelectedProject ? <button type="button" className="project-complete-button" onClick={completeProject} disabled={savingProject}><Check size={17} /> {savingProject ? "Finalizando…" : "Finalizar proyecto"}</button> : operativeProjectOrders.length > 0 ? <p className="project-completion-hint">Termina todas las órdenes para poder cerrar el proyecto.</p> : null}
-            </section>
-
             <section className="project-detail-section project-tracking-section">
               <div className="project-detail-heading"><div><ClipboardList size={20} /><h3>Seguimiento general del proyecto</h3></div></div>
               <div className="project-tracking-table-wrap">
@@ -2149,20 +2164,22 @@ function Dashboard({ session }) {
                   <tbody><tr>
                     <td>{selectedProject.work_locations?.name || "Por definir"}</td>
                     <td>{canEditOperations ? <label className="project-tracking-check"><input type="checkbox" checked={Boolean(selectedProject.site_visit_completed_at)} onChange={toggleProjectSiteVisit} disabled={savingProjectTracking} /><span>{selectedProject.site_visit_completed_at ? "Realizada" : "Pendiente"}</span></label> : selectedProject.site_visit_completed_at ? "Realizada" : "Pendiente"}{selectedProject.site_visit_completed_at && <small>{formatDate(selectedProject.site_visit_completed_at)}{selectedProject.visitor?.full_name ? ` · ${selectedProject.visitor.full_name}` : ""}</small>}</td>
-                    <td><span className={`tracking-badge ${projectHasQuote ? "done" : "pending"}`}>{projectHasQuote ? "Sí" : "Pendiente"}</span></td>
-                    <td>{projectAssignees.length ? projectAssignees.join(", ") : "Por asignar"}</td>
+                    <td><span className={`tracking-badge ${selectedProject.quote_completed ? "done" : "pending"}`}>{selectedProject.quote_completed ? "Sí" : "Pendiente"}</span></td>
+                    <td>{getProjectAssigneeNames(selectedProject.id).join(", ") || "Por asignar"}</td>
                     <td>{selectedProject.manager?.full_name || "Por asignar"}</td>
-                    <td><strong>{projectProgress}%</strong><small>{completedProjectOrders} de {operativeProjectOrders.length} órdenes</small></td>
-                    <td><span className={`tracking-badge ${projectHasReport ? "done" : "pending"}`}>{projectHasReport ? "Cargado" : "Pendiente"}</span></td>
-                    <td><span className={`tracking-badge ${projectHasInvoice ? "done" : "pending"}`}>{projectHasInvoice ? "Cargada" : "Pendiente"}</span></td>
+                    <td><strong>{selectedProject.progress_percent ?? 0}%</strong></td>
+                    <td><span className={`tracking-badge ${selectedProject.report_completed ? "done" : "pending"}`}>{selectedProject.report_completed ? "Terminado" : "Pendiente"}</span></td>
+                    <td><span className={`tracking-badge ${selectedProject.invoice_completed ? "done" : "pending"}`}>{selectedProject.invoice_completed ? "Generada" : "Pendiente"}</span></td>
                   </tr></tbody>
                 </table>
               </div>
-              <p className="project-tracking-help">Cotización, reporte y factura se actualizan al cargar esos documentos. Las asignaciones y el porcentaje se calculan con las órdenes de trabajo.</p>
+              <p className="project-tracking-help">Usa “Editar proyecto” para actualizar el personal, avance, cotización, reporte y factura.</p>
             </section>
 
+            {selectedProject.status === "completed" ? <div className="project-completion-note"><Check size={17} /> Proyecto finalizado</div> : canEditOperations && <button type="button" className="project-complete-button" onClick={() => completeProject()} disabled={savingProject}><Check size={17} /> {savingProject ? "Finalizando…" : "Marcar como terminado"}</button>}
+
             {loadingProject ? <div className="internal-empty">Cargando expediente…</div> : <>
-              <section className="project-detail-section">
+              <section className="project-detail-section" hidden>
                 <div className="project-detail-heading"><div><ClipboardList size={20} /><h3>Órdenes de trabajo</h3></div></div>
                 {selectedProjectOrders.length === 0 ? <p className="project-section-empty">Todavía no hay órdenes para este proyecto.</p> : (
                   <div className="project-work-order-list">{selectedProjectOrders.map((order) => <article key={order.id}>
@@ -2189,7 +2206,7 @@ function Dashboard({ session }) {
                 </form>}
               </section>
 
-              <section className="project-detail-section">
+              <section className="project-detail-section" hidden>
                 <div className="project-detail-heading"><div><Wrench size={20} /><h3>Maquinaria y equipo asignado</h3></div></div>
                 {projectEquipment.length === 0 ? <p className="project-section-empty">Todavía no hay equipos asignados.</p> : (
                   <div className="project-equipment-list">{projectEquipment.map((item) => <article key={item.equipment_id}>
@@ -2217,7 +2234,7 @@ function Dashboard({ session }) {
                 </form>}
               </section>
 
-              <section className="project-detail-section">
+              <section className="project-detail-section" hidden>
                 <div className="project-detail-heading"><div><FileText size={20} /><h3>Documentos del proyecto</h3></div></div>
                 {projectDocuments.length === 0 ? <p className="project-section-empty">Todavía no hay documentos guardados.</p> : (
                   <div className="project-document-list">{projectDocuments.map((document) => <article key={document.id}>
