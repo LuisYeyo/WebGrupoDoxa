@@ -63,7 +63,7 @@ const DOCUMENT_CATEGORY_LABELS = {
 
 const AUDIT_TABLE_LABELS = { clients: "Cliente", projects: "Proyecto", quote_requests: "Solicitud", work_orders: "Orden de trabajo", equipment: "Equipo", work_locations: "Ubicación" }
 const AUDIT_ACTION_LABELS = { INSERT: "Registró", UPDATE: "Actualizó", DELETE: "Eliminó" }
-const AUDIT_FIELD_LABELS = { status: "estado", name: "nombre", legal_name: "razón social", manager_id: "responsable", assigned_to: "asignación", due_date: "fecha estimada de término", start_date: "fecha de inicio", location_id: "ubicación", phone: "teléfono", email: "correo", notes: "notas", description: "descripción" }
+const AUDIT_FIELD_LABELS = { status: "estado", name: "nombre", legal_name: "razón social", manager_id: "responsable", assigned_to: "asignación", due_date: "fecha estimada de término", start_date: "fecha de inicio", site_visit_completed_at: "visita de obra", location_id: "ubicación", phone: "teléfono", email: "correo", notes: "notas", description: "descripción" }
 
 function auditRecordName(log) {
   const data = log.new_data || log.old_data || {}
@@ -539,6 +539,7 @@ function Dashboard({ session }) {
   const [savingPhotoId, setSavingPhotoId] = useState(null)
   const [deletingPhotoId, setDeletingPhotoId] = useState(null)
   const [savingPublication, setSavingPublication] = useState(false)
+  const [savingProjectTracking, setSavingProjectTracking] = useState(false)
   const [uploadingDocument, setUploadingDocument] = useState(false)
   const [activeModule, setActiveModule] = useState("dashboard")
   const [showClientForm, setShowClientForm] = useState(false)
@@ -613,6 +614,10 @@ function Dashboard({ session }) {
   const operativeProjectOrders = selectedProjectOrders.filter((order) => order.status !== "cancelled")
   const completedProjectOrders = operativeProjectOrders.filter((order) => order.status === "completed").length
   const projectProgress = operativeProjectOrders.length ? Math.round((completedProjectOrders / operativeProjectOrders.length) * 100) : 0
+  const projectAssignees = [...new Set(operativeProjectOrders.map((order) => order.profiles?.full_name).filter(Boolean))]
+  const projectHasQuote = projectDocuments.some((document) => document.category === "quote") || (selectedProject && selectedProject.status !== "lead")
+  const projectHasReport = projectDocuments.some((document) => document.category === "inspection_report")
+  const projectHasInvoice = projectDocuments.some((document) => document.category === "invoice")
   const canCompleteSelectedProject = operativeProjectOrders.length > 0 && completedProjectOrders === operativeProjectOrders.length
 
   const exportWorkOrdersCsv = () => {
@@ -664,7 +669,7 @@ function Dashboard({ session }) {
     setLoadingProject(true)
     setError("")
 
-    const [lessonResult, photoResult, documentResult, equipmentResult, publicationResult, photoPublicationResult] = await Promise.all([
+    const [lessonResult, photoResult, documentResult, equipmentResult, publicationResult, photoPublicationResult, trackingResult] = await Promise.all([
       supabase.from("project_lessons")
         .select("id, category, title, situation, lesson, created_at, profiles(full_name)")
         .eq("project_id", project.id)
@@ -685,6 +690,7 @@ function Dashboard({ session }) {
         .order("created_at", { ascending: false }),
       supabase.from("projects").select("is_public, public_description, published_at").eq("id", project.id).single(),
       supabase.from("documents").select("id, is_public").eq("project_id", project.id).eq("category", "work_evidence"),
+      supabase.from("projects").select("site_visit_completed_at, site_visit_completed_by, visitor:profiles!projects_site_visit_completed_by_fkey(full_name)").eq("id", project.id).single(),
     ])
 
     if (lessonResult.error || photoResult.error || documentResult.error || equipmentResult.error) {
@@ -701,7 +707,28 @@ function Dashboard({ session }) {
       setProjectEquipment(equipmentResult.data ?? [])
     }
     if (!publicationResult.error) setSelectedProject((current) => current?.id === project.id ? { ...current, ...publicationResult.data } : current)
+    if (!trackingResult.error) setSelectedProject((current) => current?.id === project.id ? { ...current, ...trackingResult.data } : current)
     setLoadingProject(false)
+  }
+
+  const toggleProjectSiteVisit = async () => {
+    if (!selectedProject || !canEditOperations) return
+    setSavingProjectTracking(true)
+    setError("")
+    const completedAt = selectedProject.site_visit_completed_at ? null : new Date().toISOString()
+    const completedBy = completedAt ? session.user.id : null
+    const { data, error: updateError } = await supabase.from("projects")
+      .update({ site_visit_completed_at: completedAt, site_visit_completed_by: completedBy })
+      .eq("id", selectedProject.id)
+      .select("site_visit_completed_at, site_visit_completed_by, visitor:profiles!projects_site_visit_completed_by_fkey(full_name)")
+      .single()
+
+    if (updateError) {
+      setError("No fue posible actualizar la visita de obra. Verifica que la migración esté instalada.")
+    } else {
+      setSelectedProject((current) => ({ ...current, ...data }))
+    }
+    setSavingProjectTracking(false)
   }
 
   const createLesson = async (event) => {
@@ -2112,6 +2139,26 @@ function Dashboard({ session }) {
                 <span><strong>{operativeProjectOrders.filter((order) => ["in_progress", "blocked"].includes(order.status)).length}</strong> activas</span>
               </div>
               {selectedProject.status === "completed" ? <div className="project-completion-note"><Check size={17} /> Proyecto finalizado</div> : canCompleteSelectedProject ? <button type="button" className="project-complete-button" onClick={completeProject} disabled={savingProject}><Check size={17} /> {savingProject ? "Finalizando…" : "Finalizar proyecto"}</button> : operativeProjectOrders.length > 0 ? <p className="project-completion-hint">Termina todas las órdenes para poder cerrar el proyecto.</p> : null}
+            </section>
+
+            <section className="project-detail-section project-tracking-section">
+              <div className="project-detail-heading"><div><ClipboardList size={20} /><h3>Seguimiento general del proyecto</h3></div></div>
+              <div className="project-tracking-table-wrap">
+                <table className="project-tracking-table">
+                  <thead><tr><th>Planta</th><th>Visita de obra</th><th>Cotizó</th><th>Asignado</th><th>Encargado</th><th>Porcentaje</th><th>Reporte</th><th>Factura</th></tr></thead>
+                  <tbody><tr>
+                    <td>{selectedProject.work_locations?.name || "Por definir"}</td>
+                    <td>{canEditOperations ? <label className="project-tracking-check"><input type="checkbox" checked={Boolean(selectedProject.site_visit_completed_at)} onChange={toggleProjectSiteVisit} disabled={savingProjectTracking} /><span>{selectedProject.site_visit_completed_at ? "Realizada" : "Pendiente"}</span></label> : selectedProject.site_visit_completed_at ? "Realizada" : "Pendiente"}{selectedProject.site_visit_completed_at && <small>{formatDate(selectedProject.site_visit_completed_at)}{selectedProject.visitor?.full_name ? ` · ${selectedProject.visitor.full_name}` : ""}</small>}</td>
+                    <td><span className={`tracking-badge ${projectHasQuote ? "done" : "pending"}`}>{projectHasQuote ? "Sí" : "Pendiente"}</span></td>
+                    <td>{projectAssignees.length ? projectAssignees.join(", ") : "Por asignar"}</td>
+                    <td>{selectedProject.manager?.full_name || "Por asignar"}</td>
+                    <td><strong>{projectProgress}%</strong><small>{completedProjectOrders} de {operativeProjectOrders.length} órdenes</small></td>
+                    <td><span className={`tracking-badge ${projectHasReport ? "done" : "pending"}`}>{projectHasReport ? "Cargado" : "Pendiente"}</span></td>
+                    <td><span className={`tracking-badge ${projectHasInvoice ? "done" : "pending"}`}>{projectHasInvoice ? "Cargada" : "Pendiente"}</span></td>
+                  </tr></tbody>
+                </table>
+              </div>
+              <p className="project-tracking-help">Cotización, reporte y factura se actualizan al cargar esos documentos. Las asignaciones y el porcentaje se calculan con las órdenes de trabajo.</p>
             </section>
 
             {loadingProject ? <div className="internal-empty">Cargando expediente…</div> : <>
