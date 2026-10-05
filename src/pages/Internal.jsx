@@ -514,6 +514,7 @@ function Dashboard({ session }) {
   const [requestView, setRequestView] = useState("active")
   const [searchTerm, setSearchTerm] = useState("")
   const [listStatus, setListStatus] = useState("all")
+  const [projectYear, setProjectYear] = useState(() => String(new Date().getFullYear()))
   const [savingStatus, setSavingStatus] = useState(false)
   const [deletingRequest, setDeletingRequest] = useState(false)
   const [savingConversion, setSavingConversion] = useState(false)
@@ -605,7 +606,12 @@ function Dashboard({ session }) {
   const visibleLocations = locations.filter((location) => matchesStatus(location.status, RECORD_STATUS_LABELS) && includesSearch(location.name, location.company_name, location.clients?.legal_name, location.city, location.state))
   const visibleEquipment = equipment.filter((item) => matchesStatus(item.status, RECORD_STATUS_LABELS) && includesSearch(item.internal_code, item.name, item.category, item.brand, item.model, item.serial_number, item.work_locations?.name))
   const visibleWorkOrders = workOrders.filter((order) => matchesStatus(order.status, WORK_ORDER_STATUS_LABELS) && includesSearch(order.code, order.title, order.description, order.projects?.code, order.projects?.name, order.profiles?.full_name))
-  const visibleProjects = projects.filter((project) => matchesStatus(project.status, STATUS_LABELS) && includesSearch(project.code, project.name, project.service, project.clients?.legal_name, project.clients?.tax_id, project.work_locations?.name))
+  const getProjectYear = (project) => String(project.start_date || project.created_at || "").slice(0, 4)
+  const projectYears = [...new Set(projects.map(getProjectYear).filter(Boolean))].sort((a, b) => b.localeCompare(a))
+  const selectableProjectYears = [...new Set([String(dashboardDate.getFullYear()), ...projectYears])].sort((a, b) => b.localeCompare(a))
+  const annualProjects = projects.filter((project) => projectYear === "all" || getProjectYear(project) === projectYear)
+  const annualAverageProgress = annualProjects.length ? Math.round(annualProjects.reduce((total, project) => total + (project.progress_percent ?? 0), 0) / annualProjects.length) : 0
+  const visibleProjects = annualProjects.filter((project) => matchesStatus(project.status, STATUS_LABELS) && includesSearch(project.code, project.name, project.service, project.clients?.legal_name, project.clients?.tax_id, project.work_locations?.name))
   const selectedProjectOrders = selectedProject ? workOrders.filter((order) => order.project_id === selectedProject.id) : []
   const projectProgress = selectedProject?.progress_percent ?? 0
   const getProjectAssigneeNames = (projectId) => projectAssignees.filter((item) => item.project_id === projectId).map((item) => item.profiles?.full_name).filter(Boolean)
@@ -627,6 +633,26 @@ function Dashboard({ session }) {
     const link = document.createElement("a")
     link.href = url
     link.download = `ordenes-doxa-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  const exportAnnualProjectsCsv = () => {
+    const headings = ["Año", "Folio", "Trabajo", "Cliente", "RFC", "Responsable", "Planta", "Visita", "Cotizado", "Asignados", "Avance", "Reporte", "Factura", "Estado", "Inicio", "Término"]
+    const rows = visibleProjects.map((project) => [
+      getProjectYear(project), project.code, project.name, project.clients?.legal_name || "", project.clients?.tax_id || "",
+      project.manager?.full_name || "", project.work_locations?.name || "", project.site_visit_completed_at ? "Sí" : "No",
+      project.quote_completed ? "Sí" : "No", getProjectAssigneeNames(project.id).join("; "), `${project.progress_percent ?? 0}%`,
+      project.report_completed ? "Sí" : "No", project.invoice_completed ? "Sí" : "No", STATUS_LABELS[project.status] || project.status,
+      project.start_date || "", project.completed_at || project.due_date || "",
+    ])
+    const csv = `\uFEFF${[headings, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")}`
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }))
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `proyectos-doxa-${projectYear === "all" ? "todos" : projectYear}.csv`
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -1687,8 +1713,10 @@ function Dashboard({ session }) {
             <article><ClipboardList size={22} /><div><strong>{workOrders.length}</strong><span>Órdenes registradas</span></div></article>
             <article><RefreshCw size={22} /><div><strong>{workOrders.filter((item) => ["scheduled", "in_progress", "blocked"].includes(item.status)).length}</strong><span>En seguimiento</span></div></article>
           </> : <>
-            <article><ClipboardList size={22} /><div><strong>{projects.length}</strong><span>Trabajos registrados</span></div></article>
-            <article><RefreshCw size={22} /><div><strong>{projects.filter((item) => item.status === "in_progress").length}</strong><span>En proceso</span></div></article>
+            <article><ClipboardList size={22} /><div><strong>{annualProjects.length}</strong><span>Trabajos en {projectYear === "all" ? "todos los años" : projectYear}</span></div></article>
+            <article><RefreshCw size={22} /><div><strong>{annualProjects.filter((item) => item.status === "in_progress").length}</strong><span>En proceso</span></div></article>
+            <article><Check size={22} /><div><strong>{annualProjects.filter((item) => item.status === "completed").length}</strong><span>Terminados</span></div></article>
+            <article><CalendarDays size={22} /><div><strong>{annualAverageProgress}%</strong><span>Avance promedio</span></div></article>
           </>}
         </div>}
 
@@ -1701,7 +1729,9 @@ function Dashboard({ session }) {
 
         {!["dashboard", "users", "activity"].includes(activeModule) && <div className="internal-list-toolbar">
           <label className="internal-search-field"><Search size={17} /><span className="sr-only">Buscar</span><input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder={activeModule === "requests" ? "Buscar por folio, cliente o servicio" : activeModule === "clients" ? "Buscar por empresa, RFC o contacto" : activeModule === "locations" ? "Buscar taller o ubicación" : activeModule === "equipment" ? "Buscar código, equipo, marca o serie" : activeModule === "workOrders" ? "Buscar orden, proyecto o responsable" : "Buscar proyecto, cliente o servicio"} /></label>
+          {activeModule === "projects" && <select aria-label="Filtrar proyectos por año" value={projectYear} onChange={(event) => setProjectYear(event.target.value)}><option value="all">Todos los años</option>{selectableProjectYears.map((year) => <option key={year} value={year}>{year}</option>)}</select>}
           {statusFilterOptions && <select aria-label="Filtrar por estado" value={Object.hasOwn(statusFilterOptions, listStatus) ? listStatus : "all"} onChange={(event) => setListStatus(event.target.value)}><option value="all">Todos los estados</option>{Object.entries(statusFilterOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>}
+          {activeModule === "projects" && <button type="button" className="internal-year-export" onClick={exportAnnualProjectsCsv} disabled={visibleProjects.length === 0}><FileDown size={16} /> Exportar año</button>}
         </div>}
 
         {activeModule === "users" ? <InternalUsers session={session} /> : activeModule === "activity" ? <div className="audit-log-card">
