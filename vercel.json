@@ -14,12 +14,33 @@
       "source": "/doxa1",
       "destination": "/doxa",
       "permanent": true
+    },
+    {
+      "source": "/procesos",
+      "destination": "/servicios",
+      "permanent": true
+    },
+    {
+      "source": "/capacidades",
+      "destination": "/infraestructura",
+      "permanent": true
     }
   ],
   "rewrites": [
-    {
-      "source": "/:path*",
-      "destination": "/index.html"
-    }
+    { "source": "/grupo", "destination": "/index.html" },
+    { "source": "/grupo/:company", "destination": "/index.html" },
+    { "source": "/servicios", "destination": "/index.html" },
+    { "source": "/servicios/:slug", "destination": "/index.html" },
+    { "source": "/infraestructura", "destination": "/index.html" },
+    { "source": "/renta", "destination": "/index.html" },
+    { "source": "/proyectos", "destination": "/index.html" },
+    { "source": "/proyectos/:slug", "destination": "/index.html" },
+    { "source": "/contacto", "destination": "/index.html" },
+    { "source": "/aviso-de-privacidad", "destination": "/index.html" },
+    { "source": "/doxa", "destination": "/index.html" },
+    { "source": "/remsa", "destination": "/index.html" },
+    { "source": "/secmimar", "destination": "/index.html" },
+    { "source": "/mantenimiento-industrial-doxa", "destination": "/index.html" },
+    { "source": "/interno", "destination": "/index.html" }
   ]
 }

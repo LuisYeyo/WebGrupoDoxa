@@ -10,6 +10,7 @@ import {
 } from "react-router-dom"
 
 import MainLayout from "./components/layout/MainLayout"
+import RouteSeo from "./components/layout/RouteSeo"
 
 const Home = lazy(() => import("./pages/Home"))
 const Group = lazy(() => import("./pages/Group"))
@@ -32,6 +33,7 @@ const Internal = lazy(() => import("./pages/Internal"))
 function App() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-white" aria-label="Cargando página" />}>
+      <RouteSeo />
       <Routes>
       <Route path="/interno" element={<Internal />} />
 
